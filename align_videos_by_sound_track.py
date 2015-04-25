@@ -43,7 +43,7 @@ def extract_audio(dir, video_file):
     audio_output = track_name + "WAV.wav"  # !! CHECK TO SEE IF FILE IS IN UPLOADS DIRECTORY
     output = os.path.join(dir, audio_output)
     command = "avconv -y -i %s -vn -ac 1 -f wav %s" % (pipes.quote(video_file), pipes.quote(output))
-    print command
+    # print command
     call([command], shell=True, stderr=open(os.devnull, 'w'))
     # call(command)
     return output
@@ -153,7 +153,7 @@ def find_delay(time_pairs):
         else:
             t_diffs[delta_t] = 1
     t_diffs_sorted = sorted(t_diffs.items(), key=lambda x: x[1])
-    print t_diffs_sorted
+    # print t_diffs_sorted
     time_delay = t_diffs_sorted[-1][0]
 
     return time_delay
@@ -196,13 +196,18 @@ if __name__ == "__main__":
 
     if args.file_names and len(args.file_names) == 2:
         file_specs = args.file_names
-        print file_specs
+        # print file_specs
     else:  # No pipe and no input file, print help text and exit
         bailout()
     file1 = os.path.abspath(file_specs[0])
     file2 = os.path.abspath(file_specs[1])
-    if not (os.path.isfile(file1) and os.path.isfile(file2)):
-        print "** At least one of %s and %s does not exist **" % (file1, file2)
+    non_existing_files = []
+    if not os.path.isfile(file1):
+        non_existing_files.append(file1)
+    if not os.path.isfile(file2):
+        non_existing_files.append(file2)
+    if non_existing_files:
+        print "** The following are not existing files: %s **" % (','.join(non_existing_files),)
         bailout()
     result = align(file1, file2)
     in_sync = False
