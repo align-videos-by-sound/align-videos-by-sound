@@ -16,7 +16,7 @@ It reports back the offset. Example:
     %s good_video_shitty_audio.mp4 good_audio_shitty_video.mp4
 
     Result: The beginning of good_video_shitty_audio.mp4 needs to be cropped 11.348 seconds for files to be in sync
-     
+
 ''' % (__file__, __file__)
 import os
 import sys
@@ -226,4 +226,4 @@ if __name__ == "__main__":
         print "files are in sync already"
     else:
         print """Result:
-            %s needs to be truncated by %s seconds""" % (first_started_recording, trunc_amount)
+            The file '%s' needs to be truncated by %s seconds for the files' soundtracks to match""" % (first_started_recording, trunc_amount)
