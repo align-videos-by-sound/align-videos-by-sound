@@ -26,6 +26,7 @@ import numpy as np
 from subprocess import call
 import math
 import tempfile
+import shutil
 import argparse
 parser = argparse.ArgumentParser(description=DOC)
 parser.add_argument('file_names', nargs="*")
@@ -180,7 +181,7 @@ def align(file1, file2, fft_bin_size=1024, overlap=0, box_height=512, box_width=
     delay = find_delay(pairs)
     samples_per_sec = float(rate) / float(fft_bin_size)
     seconds = round(float(delay) / float(samples_per_sec), 4)
-
+    shutil.rmtree(working_dir)
     if seconds > 0:
         return (seconds, 0)
     else:
