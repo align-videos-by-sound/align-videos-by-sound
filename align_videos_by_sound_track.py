@@ -1,21 +1,50 @@
+#! /usr/bin/env python
 # This script based on alignment_by_row_channels.py by Allison Deal, see
 # https://github.com/allisonnicoledeal/VideoSync/blob/master/alignment_by_row_channels.py
+DOC = '''
+This program reports the offset difference for audio and video files, 
+containing audio recordings from the same event. It relies on avconv being 
+installed and the python libraries scipy and numpy.
 
 
+Usage: 
+
+    %s <file1> <file2>
+
+It reports back the offset. Example:
+
+    %s good_video_shitty_audio.mp4 good_audio_shitty_video.mp4
+
+    Result: The beginning of good_video_shitty_audio.mp4 needs to be cropped 11.348 seconds for files to be in sync
+     
+''' % (__file__, __file__)
+import os
+import sys
+import pipes
 import scipy.io.wavfile
 import numpy as np
 from subprocess import call
 import math
+import tempfile
+import argparse
+parser = argparse.ArgumentParser(description=DOC)
+parser.add_argument('file_names', nargs="*")
 
 
+args = parser.parse_args()
 # Extract audio from video file, save as wav auido file
 # INPUT: Video file
 # OUTPUT: Does not return any values, but saves audio as wav file
+
+
 def extract_audio(dir, video_file):
-    track_name = video_file.split(".")
-    audio_output = track_name[0] + "WAV.wav"  # !! CHECK TO SEE IF FILE IS IN UPLOADS DIRECTORY
-    output = dir + audio_output
-    call(["avconv", "-y", "-i", dir + video_file, "-vn", "-ac", "1", "-f", "wav", output])
+    track_name = os.path.basename(video_file)
+    audio_output = track_name + "WAV.wav"  # !! CHECK TO SEE IF FILE IS IN UPLOADS DIRECTORY
+    output = os.path.join(dir, audio_output)
+    command = "avconv -y -i %s -vn -ac 1 -f wav %s" % (pipes.quote(video_file), pipes.quote(output))
+    print command
+    call([command], shell=True, stderr=open(os.devnull, 'w'))
+    # call(command)
     return output
 
 
@@ -130,16 +159,17 @@ def find_delay(time_pairs):
 
 
 # Find time delay between two video files
-def align(video1, video2, dir, fft_bin_size=1024, overlap=0, box_height=512, box_width=43, samples_per_box=7):
+def align(file1, file2, fft_bin_size=1024, overlap=0, box_height=512, box_width=43, samples_per_box=7):
     # Process first file
-    wavfile1 = extract_audio(dir, video1)
+    working_dir = tempfile.mkdtemp()
+    wavfile1 = extract_audio(working_dir, file1)
     raw_audio1, rate = read_audio(wavfile1)
     bins_dict1 = make_horiz_bins(raw_audio1[:44100 * 120], fft_bin_size, overlap, box_height)  # bins, overlap, box height
     boxes1 = make_vert_bins(bins_dict1, box_width)  # box width
     ft_dict1 = find_bin_max(boxes1, samples_per_box)  # samples per box
 
     # Process second file
-    wavfile2 = extract_audio(dir, video2)
+    wavfile2 = extract_audio(working_dir, file2)
     raw_audio2, rate = read_audio(wavfile2)
     bins_dict2 = make_horiz_bins(raw_audio2[:44100 * 60], fft_bin_size, overlap, box_height)
     boxes2 = make_vert_bins(bins_dict2, box_width)
@@ -157,13 +187,37 @@ def align(video1, video2, dir, fft_bin_size=1024, overlap=0, box_height=512, box
         return (0, abs(seconds))
 
 
-# ======= TEST FILES ==============
-# audio1 = "regina6POgShQ-lC4.mp4"
-# audio2 = "reginaJo2cUWpILMgWAV.wav"
-# audio1 = "Settle2kFaZIKtcn6s.mp4"
-# audio2 = "Settle2d_tj-9_dGog.mp4"
-# audio1 = "DanielZ5PPlk53IMY.mp4"
-# audio2 = "Daniel08ycq2T_ab4.mp4"
-# directory = "./uploads/"
-# t = align(audio1, audio2, directory)
-# print t
+def bailout():
+    print DOC
+    sys.exit()
+
+if __name__ == "__main__":
+
+    if args.file_names and len(args.file_names) == 2:
+        file_specs = args.file_names
+        print file_specs
+    else:  # No pipe and no input file, print help text and exit
+        bailout()
+    file1 = os.path.abspath(file_specs[0])
+    file2 = os.path.abspath(file_specs[1])
+    if not (os.path.isfile(file1) and os.path.isfile(file2)):
+        print "** At least one of %s and %s does not exist **" % (file1, file2)
+        bailout()
+    result = align(file1, file2)
+    in_sync = False
+    if result[0]:
+        first_started_recording = file2
+        last_started_recording = file1
+        trunc_amount = result[0]
+    elif result[1]:
+        first_started_recording = file2
+        last_started_recording = file1
+        trunc_amount = result[1]
+    else:
+        in_sync = True
+
+    if in_sync:
+        print "files are in sync already"
+    else:
+        print """Result:
+            %s needs to be truncated by %s seconds""" % (first_started_recording, trunc_amount)
