@@ -42,7 +42,7 @@ def extract_audio(dir, video_file):
     track_name = os.path.basename(video_file)
     audio_output = track_name + "WAV.wav"  # !! CHECK TO SEE IF FILE IS IN UPLOADS DIRECTORY
     output = os.path.join(dir, audio_output)
-    command = "avconv -y -i %s -vn -ac 1 -f wav %s" % (pipes.quote(video_file), pipes.quote(output))
+    command = "ffmpeg -y -i %s -vn -ac 1 -f wav %s" % (pipes.quote(video_file), pipes.quote(output))
     # print command
     call([command], shell=True, stderr=open(os.devnull, 'w'))
     # call(command)
