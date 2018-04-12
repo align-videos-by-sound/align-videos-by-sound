@@ -3,7 +3,7 @@
 # https://github.com/allisonnicoledeal/VideoSync/blob/master/alignment_by_row_channels.py
 DOC = '''
 This program reports the offset difference for audio and video files,
-containing audio recordings from the same event. It relies on avconv being
+containing audio recordings from the same event. It relies on ffmpeg being
 installed and the python libraries scipy and numpy.
 
 
