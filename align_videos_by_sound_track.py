@@ -64,8 +64,8 @@ def make_horiz_bins(data, fft_bin_size, overlap, box_height):
     if (len(sample_data) == fft_bin_size):  # if there are enough audio points left to create a full fft bin
         intensities = fourier(sample_data)  # intensities is list of fft results
         for i in range(len(intensities)):
-            box_y = i / box_height
-            if horiz_bins.has_key(box_y):
+            box_y = i // box_height
+            if box_y in horiz_bins:
                 horiz_bins[box_y].append((intensities[i], 0, i))  # (intensity, x, y)
             else:
                 horiz_bins[box_y] = [(intensities[i], 0, i)]
@@ -76,8 +76,8 @@ def make_horiz_bins(data, fft_bin_size, overlap, box_height):
         if (len(sample_data) == fft_bin_size):
             intensities = fourier(sample_data)
             for k in range(len(intensities)):
-                box_y = k / box_height
-                if horiz_bins.has_key(box_y):
+                box_y = k // box_height
+                if box_y in horiz_bins:
                     horiz_bins[box_y].append((intensities[k], x_coord_counter, k))  # (intensity, x, y)
                 else:
                     horiz_bins[box_y] = [(intensities[k], x_coord_counter, k)]
@@ -92,7 +92,7 @@ def make_horiz_bins(data, fft_bin_size, overlap, box_height):
 def fourier(sample):  # , overlap):
     mag = []
     fft_data = np.fft.fft(sample)  # Returns real and complex value pairs
-    for i in range(len(fft_data) / 2):
+    for i in range(len(fft_data) // 2):
         r = fft_data[i].real ** 2
         j = fft_data[i].imag ** 2
         mag.append(round(math.sqrt(r + j), 2))
@@ -102,10 +102,10 @@ def fourier(sample):  # , overlap):
 
 def make_vert_bins(horiz_bins, box_width):
     boxes = {}
-    for key in horiz_bins.keys():
+    for key in list(horiz_bins.keys()):
         for i in range(len(horiz_bins[key])):
-            box_x = horiz_bins[key][i][1] / box_width
-            if boxes.has_key((box_x, key)):
+            box_x = horiz_bins[key][i][1] // box_width
+            if (box_x, key) in boxes:
                 boxes[(box_x, key)].append((horiz_bins[key][i]))
             else:
                 boxes[(box_x, key)] = [(horiz_bins[key][i])]
@@ -115,7 +115,7 @@ def make_vert_bins(horiz_bins, box_width):
 
 def find_bin_max(boxes, maxes_per_box):
     freqs_dict = {}
-    for key in boxes.keys():
+    for key in list(boxes.keys()):
         max_intensities = [(1, 2, 3)]
         for i in range(len(boxes[key])):
             if boxes[key][i][0] > min(max_intensities)[0]:
@@ -125,7 +125,7 @@ def find_bin_max(boxes, maxes_per_box):
                     max_intensities.append(boxes[key][i])
                     max_intensities.remove(min(max_intensities))
         for j in range(len(max_intensities)):
-            if freqs_dict.has_key(max_intensities[j][2]):
+            if max_intensities[j][2] in freqs_dict:
                 freqs_dict[max_intensities[j][2]].append(max_intensities[j][1])
             else:
                 freqs_dict[max_intensities[j][2]] = [max_intensities[j][1]]
@@ -135,8 +135,8 @@ def find_bin_max(boxes, maxes_per_box):
 
 def find_freq_pairs(freqs_dict_orig, freqs_dict_sample):
     time_pairs = []
-    for key in freqs_dict_sample.keys():  # iterate through freqs in sample
-        if freqs_dict_orig.has_key(key):  # if same sample occurs in base
+    for key in list(freqs_dict_sample.keys()):  # iterate through freqs in sample
+        if key in freqs_dict_orig:  # if same sample occurs in base
             for i in range(len(freqs_dict_sample[key])):  # determine time offset
                 for j in range(len(freqs_dict_orig[key])):
                     time_pairs.append((freqs_dict_sample[key][i], freqs_dict_orig[key][j]))
@@ -148,12 +148,12 @@ def find_delay(time_pairs):
     t_diffs = {}
     for i in range(len(time_pairs)):
         delta_t = time_pairs[i][0] - time_pairs[i][1]
-        if t_diffs.has_key(delta_t):
+        if delta_t in t_diffs:
             t_diffs[delta_t] += 1
         else:
             t_diffs[delta_t] = 1
-    t_diffs_sorted = sorted(t_diffs.items(), key=lambda x: x[1])
-    # print t_diffs_sorted
+    t_diffs_sorted = sorted(list(t_diffs.items()), key=lambda x: x[1])
+    # print(t_diffs_sorted)
     time_delay = t_diffs_sorted[-1][0]
 
     return time_delay
@@ -180,7 +180,7 @@ def align(file1, file2, fft_bin_size=1024, overlap=0, box_height=512, box_width=
     pairs = find_freq_pairs(ft_dict1, ft_dict2)
     delay = find_delay(pairs)
     samples_per_sec = float(rate) / float(fft_bin_size)
-    seconds = round(float(delay) / float(samples_per_sec), 4)
+    seconds = float(delay) / float(samples_per_sec)
     shutil.rmtree(working_dir)
     if seconds > 0:
         return (seconds, 0)
@@ -189,14 +189,14 @@ def align(file1, file2, fft_bin_size=1024, overlap=0, box_height=512, box_width=
 
 
 def bailout():
-    print DOC
+    print(DOC)
     sys.exit()
 
 if __name__ == "__main__":
 
     if args.file_names and len(args.file_names) == 2:
         file_specs = args.file_names
-        # print file_specs
+        # print(file_specs)
     else:  # No pipe and no input file, print help text and exit
         bailout()
     file1 = os.path.abspath(file_specs[0])
@@ -207,7 +207,7 @@ if __name__ == "__main__":
     if not os.path.isfile(file2):
         non_existing_files.append(file2)
     if non_existing_files:
-        print "** The following are not existing files: %s **" % (','.join(non_existing_files),)
+        print("** The following are not existing files: %s **" % (','.join(non_existing_files),))
         bailout()
     result = align(file1, file2)
     in_sync = False
@@ -223,7 +223,7 @@ if __name__ == "__main__":
         in_sync = True
 
     if in_sync:
-        print "files are in sync already"
+        print("files are in sync already")
     else:
-        print """Result:
-            The file '%s' needs to be truncated by %s seconds for the files' soundtracks to match""" % (first_started_recording, trunc_amount)
+        print("""Result:
+            The file '%s' needs to be truncated by %.4f seconds for the files' soundtracks to match""" % (first_started_recording, trunc_amount))
