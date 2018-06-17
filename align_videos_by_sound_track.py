@@ -20,6 +20,7 @@ It reports back the offset. Example:
 ''' % (__file__, __file__)
 import os
 import sys
+from collections import defaultdict
 import scipy.io.wavfile
 import numpy as np
 from subprocess import call
@@ -137,24 +138,17 @@ def find_bin_max(boxes, maxes_per_box):
 
 
 def find_freq_pairs(freqs_dict_orig, freqs_dict_sample):
-    time_pairs = []
-    for key in list(freqs_dict_sample.keys()):  # iterate through freqs in sample
-        if key in freqs_dict_orig:  # if same sample occurs in base
-            for i in range(len(freqs_dict_sample[key])):  # determine time offset
-                for j in range(len(freqs_dict_orig[key])):
-                    time_pairs.append((freqs_dict_sample[key][i], freqs_dict_orig[key][j]))
-
-    return time_pairs
+    for key in set(freqs_dict_sample.keys()) & set(freqs_dict_orig.keys()):
+        for iitem in freqs_dict_sample[key]:  # determine time offset
+            for jitem in freqs_dict_orig[key]:
+                yield (iitem, jitem)
 
 
 def find_delay(time_pairs):
-    t_diffs = {}
-    for i in range(len(time_pairs)):
-        delta_t = time_pairs[i][0] - time_pairs[i][1]
-        if delta_t in t_diffs:
-            t_diffs[delta_t] += 1
-        else:
-            t_diffs[delta_t] = 1
+    t_diffs = defaultdict(int)
+    for pair in time_pairs:
+        delta_t = pair[0] - pair[1]
+        t_diffs[delta_t] += 1
     t_diffs_sorted = sorted(list(t_diffs.items()), key=lambda x: x[1])
     # print(t_diffs_sorted)
     time_delay = t_diffs_sorted[-1][0]
