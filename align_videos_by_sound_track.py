@@ -213,8 +213,8 @@ if __name__ == "__main__":
         last_started_recording = file1
         trunc_amount = result[0]
     elif result[1]:
-        first_started_recording = file2
-        last_started_recording = file1
+        first_started_recording = file1
+        last_started_recording = file2
         trunc_amount = result[1]
     else:
         in_sync = True
@@ -223,4 +223,4 @@ if __name__ == "__main__":
         print("files are in sync already")
     else:
         print("""Result:
-            The file '%s' needs to be truncated by %.4f seconds for the files' soundtracks to match""" % (first_started_recording, trunc_amount))
+            The file '%s' needs to be have its beginning truncated by %.4f seconds for the files' soundtracks to match""" % (first_started_recording, trunc_amount))
