@@ -222,5 +222,4 @@ if __name__ == "__main__":
     if in_sync:
         print("files are in sync already")
     else:
-        print("""Result:
-            The file '%s' needs to be have its beginning truncated by %.4f seconds for the files' soundtracks to match""" % (first_started_recording, trunc_amount))
+        print("""Result: The beginning of '%s' needs to be cropped %.4f seconds for files to be in sync""" % (first_started_recording, trunc_amount))
