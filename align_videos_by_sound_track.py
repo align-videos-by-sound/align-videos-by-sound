@@ -116,8 +116,12 @@ def find_delay(time_pairs):
 
 
 class SyncDetector(object):
-    def __init__(self):
+    def __init__(self, max_misalignment=0):
         self._working_dir = tempfile.mkdtemp()
+        if max_misalignment and max_misalignment > 0:
+            self._ffmpeg_t_args = ("-t", "%d" % max_misalignment)
+        else:
+            self._ffmpeg_t_args = (None, None)
 
     def __enter__(self):
         return self
@@ -133,14 +137,15 @@ class SyncDetector(object):
         audio_output = track_name + "WAV.wav"  # !! CHECK TO SEE IF FILE IS IN UPLOADS DIRECTORY
         output = os.path.join(self._working_dir, audio_output)
         if not os.path.exists(output):
-            call([
+            call(filter(None, [
                     "ffmpeg", "-y",
+                    self._ffmpeg_t_args[0], self._ffmpeg_t_args[1],
                     "-i", "%s" % video_file,
                     "-vn",
                     "-ac", "1",
                     "-f", "wav",
                     "%s" % output
-                    ], stderr=open(os.devnull, 'w'))
+                    ]), stderr=open(os.devnull, 'w'))
         return output
 
     # Find time delay between two video files
@@ -187,6 +192,7 @@ if __name__ == "__main__":
 
     parser = argparse.ArgumentParser(description=DOC)
     parser.add_argument('file_names', nargs="*")
+    parser.add_argument('--max_misalignment', type=int)
     args = parser.parse_args()
 
     if args.file_names and len(args.file_names) >= 2:
@@ -202,7 +208,7 @@ if __name__ == "__main__":
         print("** The following are not existing files: %s **" % (','.join(non_existing_files),))
         bailout()
 
-    with SyncDetector() as det:
+    with SyncDetector(args.max_misalignment) as det:
         result = det.align(file_specs)
 
     report = []
