@@ -24,20 +24,13 @@ from collections import defaultdict
 import scipy.io.wavfile
 import numpy as np
 from subprocess import call
-import math
 import tempfile
 import shutil
-import argparse
-parser = argparse.ArgumentParser(description=DOC)
-parser.add_argument('file_names', nargs="*")
 
 
-args = parser.parse_args()
 # Extract audio from video file, save as wav auido file
 # INPUT: Video file
 # OUTPUT: Does not return any values, but saves audio as wav file
-
-
 def extract_audio(dir, video_file):
     track_name = os.path.basename(video_file)
     audio_output = track_name + "WAV.wav"  # !! CHECK TO SEE IF FILE IS IN UPLOADS DIRECTORY
@@ -62,17 +55,15 @@ def read_audio(audio_file):
 
 
 def make_horiz_bins(data, fft_bin_size, overlap, box_height):
-    horiz_bins = {}
+    horiz_bins = defaultdict(list)
     # process first sample and set matrix height
     sample_data = data[0:fft_bin_size]  # get data for first sample
     if (len(sample_data) == fft_bin_size):  # if there are enough audio points left to create a full fft bin
         intensities = fourier(sample_data)  # intensities is list of fft results
         for i in range(len(intensities)):
             box_y = i // box_height
-            if box_y in horiz_bins:
-                horiz_bins[box_y].append((intensities[i], 0, i))  # (intensity, x, y)
-            else:
-                horiz_bins[box_y] = [(intensities[i], 0, i)]
+            horiz_bins[box_y].append((intensities[i], 0, i))  # (intensity, x, y)
+
     # process remainder of samples
     x_coord_counter = 1  # starting at second sample, with x index 1
     for j in range(int(fft_bin_size - overlap), len(data), int(fft_bin_size - overlap)):
@@ -81,10 +72,7 @@ def make_horiz_bins(data, fft_bin_size, overlap, box_height):
             intensities = fourier(sample_data)
             for k in range(len(intensities)):
                 box_y = k // box_height
-                if box_y in horiz_bins:
-                    horiz_bins[box_y].append((intensities[k], x_coord_counter, k))  # (intensity, x, y)
-                else:
-                    horiz_bins[box_y] = [(intensities[k], x_coord_counter, k)]
+                horiz_bins[box_y].append((intensities[k], x_coord_counter, k))  # (intensity, x, y)
         x_coord_counter += 1
 
     return horiz_bins
@@ -94,31 +82,23 @@ def make_horiz_bins(data, fft_bin_size, overlap, box_height):
 # INPUT: list with length of number of samples per second
 # OUTPUT: list of real values len of num samples per second
 def fourier(sample):  # , overlap):
-    mag = []
     fft_data = np.fft.fft(sample)  # Returns real and complex value pairs
-    for i in range(len(fft_data) // 2):
-        r = fft_data[i].real ** 2
-        j = fft_data[i].imag ** 2
-        mag.append(round(math.sqrt(r + j), 2))
-
-    return mag
+    fft_data = fft_data[:len(fft_data) // 2]
+    return list(np.sqrt(fft_data.real**2 + fft_data.imag**2))
 
 
 def make_vert_bins(horiz_bins, box_width):
-    boxes = {}
+    boxes = defaultdict(list)
     for key in list(horiz_bins.keys()):
         for i in range(len(horiz_bins[key])):
             box_x = horiz_bins[key][i][1] // box_width
-            if (box_x, key) in boxes:
-                boxes[(box_x, key)].append((horiz_bins[key][i]))
-            else:
-                boxes[(box_x, key)] = [(horiz_bins[key][i])]
+            boxes[(box_x, key)].append((horiz_bins[key][i]))
 
     return boxes
 
 
 def find_bin_max(boxes, maxes_per_box):
-    freqs_dict = {}
+    freqs_dict = defaultdict(list)
     for key in list(boxes.keys()):
         max_intensities = [(1, 2, 3)]
         for i in range(len(boxes[key])):
@@ -129,10 +109,7 @@ def find_bin_max(boxes, maxes_per_box):
                     max_intensities.append(boxes[key][i])
                     max_intensities.remove(min(max_intensities))
         for j in range(len(max_intensities)):
-            if max_intensities[j][2] in freqs_dict:
-                freqs_dict[max_intensities[j][2]].append(max_intensities[j][1])
-            else:
-                freqs_dict[max_intensities[j][2]] = [max_intensities[j][1]]
+            freqs_dict[max_intensities[j][2]].append(max_intensities[j][1])
 
     return freqs_dict
 
@@ -157,69 +134,75 @@ def find_delay(time_pairs):
 
 
 # Find time delay between two video files
-def align(file1, file2, fft_bin_size=1024, overlap=0, box_height=512, box_width=43, samples_per_box=7):
+def align(files, fft_bin_size=1024, overlap=0, box_height=512, box_width=43, samples_per_box=7):
+    tmp_result = [0.0]
+
     # Process first file
     working_dir = tempfile.mkdtemp()
-    wavfile1 = extract_audio(working_dir, file1)
+    wavfile1 = extract_audio(working_dir, files[0])
     raw_audio1, rate = read_audio(wavfile1)
     bins_dict1 = make_horiz_bins(raw_audio1[:44100 * 120], fft_bin_size, overlap, box_height)  # bins, overlap, box height
     boxes1 = make_vert_bins(bins_dict1, box_width)  # box width
     ft_dict1 = find_bin_max(boxes1, samples_per_box)  # samples per box
 
-    # Process second file
-    wavfile2 = extract_audio(working_dir, file2)
-    raw_audio2, rate = read_audio(wavfile2)
-    bins_dict2 = make_horiz_bins(raw_audio2[:44100 * 60], fft_bin_size, overlap, box_height)
-    boxes2 = make_vert_bins(bins_dict2, box_width)
-    ft_dict2 = find_bin_max(boxes2, samples_per_box)
+    for i in range(len(files) - 1):
+        # Process second file
+        wavfile2 = extract_audio(working_dir, files[i + 1])
+        raw_audio2, rate = read_audio(wavfile2)
+        bins_dict2 = make_horiz_bins(raw_audio2[:44100 * 60], fft_bin_size, overlap, box_height)
+        boxes2 = make_vert_bins(bins_dict2, box_width)
+        ft_dict2 = find_bin_max(boxes2, samples_per_box)
 
-    # Determie time delay
-    pairs = find_freq_pairs(ft_dict1, ft_dict2)
-    delay = find_delay(pairs)
-    samples_per_sec = float(rate) / float(fft_bin_size)
-    seconds = float(delay) / float(samples_per_sec)
+        # Determie time delay
+        pairs = find_freq_pairs(ft_dict1, ft_dict2)
+        delay = find_delay(pairs)
+        samples_per_sec = float(rate) / float(fft_bin_size)
+        seconds = float(delay) / float(samples_per_sec)
+
+        #
+        tmp_result.append(-seconds)
+
     shutil.rmtree(working_dir)
-    if seconds > 0:
-        return (seconds, 0)
-    else:
-        return (0, abs(seconds))
+
+    result = np.array(tmp_result)
+    result -= result.min()
+
+    return list(result)
 
 
 def bailout():
     print(DOC)
     sys.exit()
 
-if __name__ == "__main__":
 
-    if args.file_names and len(args.file_names) == 2:
-        file_specs = args.file_names
+if __name__ == "__main__":
+    import argparse
+
+    parser = argparse.ArgumentParser(description=DOC)
+    parser.add_argument('file_names', nargs="*")
+    args = parser.parse_args()
+
+    if args.file_names and len(args.file_names) >= 2:
+        file_specs = list(map(os.path.abspath, args.file_names))
         # print(file_specs)
     else:  # No pipe and no input file, print help text and exit
         bailout()
-    file1 = os.path.abspath(file_specs[0])
-    file2 = os.path.abspath(file_specs[1])
     non_existing_files = []
-    if not os.path.isfile(file1):
-        non_existing_files.append(file1)
-    if not os.path.isfile(file2):
-        non_existing_files.append(file2)
+    for path in file_specs:
+        if not os.path.isfile(path):
+            non_existing_files.append(path)
     if non_existing_files:
         print("** The following are not existing files: %s **" % (','.join(non_existing_files),))
         bailout()
-    result = align(file1, file2)
-    in_sync = False
-    if result[0]:
-        first_started_recording = file2
-        last_started_recording = file1
-        trunc_amount = result[0]
-    elif result[1]:
-        first_started_recording = file1
-        last_started_recording = file2
-        trunc_amount = result[1]
-    else:
-        in_sync = True
+    result = align(file_specs)
 
-    if in_sync:
-        print("files are in sync already")
+    report = []
+    for i, path in enumerate(file_specs):
+        if not (result[i] > 0):
+            continue
+        report.append("""Result: The beginning of '%s' needs to be cropped %.4f seconds for files to be in sync""" % (
+                path, result[i]))
+    if report:
+        print("\n".join(report))
     else:
-        print("""Result: The beginning of '%s' needs to be cropped %.4f seconds for files to be in sync""" % (first_started_recording, trunc_amount))
+        print("files are in sync already")
