@@ -215,7 +215,7 @@ if __name__ == "__main__":
         max_late = max(result)
     crop_amounts = [-(offset - max_late) for offset in result]
     if args.json:
-        print(json.dumps({'edit_list':list(zip(file_specs, crop_amounts))}))
+        print(json.dumps({'edit_list':list(zip(file_specs, crop_amounts))}, indent=4))
     else:
         report = []
         for i, path in enumerate(file_specs):
