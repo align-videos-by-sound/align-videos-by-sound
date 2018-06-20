@@ -132,14 +132,15 @@ class SyncDetector(object):
         track_name = os.path.basename(video_file)
         audio_output = track_name + "WAV.wav"  # !! CHECK TO SEE IF FILE IS IN UPLOADS DIRECTORY
         output = os.path.join(self._working_dir, audio_output)
-        call([
-                "ffmpeg", "-y",
-                "-i", "%s" % video_file,
-                "-vn",
-                "-ac", "1",
-                "-f", "wav",
-                "%s" % output
-                ], stderr=open(os.devnull, 'w'))
+        if not os.path.exists(output):
+            call([
+                    "ffmpeg", "-y",
+                    "-i", "%s" % video_file,
+                    "-vn",
+                    "-ac", "1",
+                    "-f", "wav",
+                    "%s" % output
+                    ], stderr=open(os.devnull, 'w'))
         return output
 
     # Find time delay between two video files
