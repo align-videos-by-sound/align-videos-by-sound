@@ -210,13 +210,15 @@ if __name__ == "__main__":
 
     with SyncDetector(args.max_misalignment) as det:
         result = det.align(file_specs)
-
+        max_late = max(result)
+    crop_amounts = [-(offset - max_late) for offset in result]
+    
     report = []
     for i, path in enumerate(file_specs):
-        if not (result[i] > 0):
+        if not (crop_amounts[i] > 0):
             continue
-        report.append("""Result: The beginning of '%s' needs to be cropped %.4f seconds for files to be in sync""" % (
-                path, result[i]))
+        report.append("""Result: The beginning of '%s' needs to be cropped %.4f seconds for all files to be in sync""" % (
+                path, crop_amounts[i]))
     if report:
         print("\n".join(report))
     else:
