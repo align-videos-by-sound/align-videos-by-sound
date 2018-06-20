@@ -28,24 +28,6 @@ import tempfile
 import shutil
 
 
-# Extract audio from video file, save as wav auido file
-# INPUT: Video file
-# OUTPUT: Does not return any values, but saves audio as wav file
-def extract_audio(dir, video_file):
-    track_name = os.path.basename(video_file)
-    audio_output = track_name + "WAV.wav"  # !! CHECK TO SEE IF FILE IS IN UPLOADS DIRECTORY
-    output = os.path.join(dir, audio_output)
-    call([
-            "ffmpeg", "-y",
-            "-i", "%s" % video_file,
-            "-vn",
-            "-ac", "1",
-            "-f", "wav",
-            "%s" % output
-            ], stderr=open(os.devnull, 'w'))
-    return output
-
-
 # Read file
 # INPUT: Audio file
 # OUTPUT: Sets sample rate of wav file, Returns data read from wav file (numpy array of integers)
@@ -133,41 +115,71 @@ def find_delay(time_pairs):
     return time_delay
 
 
-# Find time delay between two video files
-def align(files, fft_bin_size=1024, overlap=0, box_height=512, box_width=43, samples_per_box=7):
-    tmp_result = [0.0]
+class SyncDetector(object):
+    def __init__(self, max_misalignment=0):
+        self._working_dir = tempfile.mkdtemp()
+        if max_misalignment and max_misalignment > 0:
+            self._ffmpeg_t_args = ("-t", "%d" % max_misalignment)
+        else:
+            self._ffmpeg_t_args = (None, None)
 
-    # Process first file
-    working_dir = tempfile.mkdtemp()
-    wavfile1 = extract_audio(working_dir, files[0])
-    raw_audio1, rate = read_audio(wavfile1)
-    bins_dict1 = make_horiz_bins(raw_audio1[:44100 * 120], fft_bin_size, overlap, box_height)  # bins, overlap, box height
-    boxes1 = make_vert_bins(bins_dict1, box_width)  # box width
-    ft_dict1 = find_bin_max(boxes1, samples_per_box)  # samples per box
+    def __enter__(self):
+        return self
 
-    for i in range(len(files) - 1):
-        # Process second file
-        wavfile2 = extract_audio(working_dir, files[i + 1])
-        raw_audio2, rate = read_audio(wavfile2)
-        bins_dict2 = make_horiz_bins(raw_audio2[:44100 * 60], fft_bin_size, overlap, box_height)
-        boxes2 = make_vert_bins(bins_dict2, box_width)
-        ft_dict2 = find_bin_max(boxes2, samples_per_box)
+    def __exit__(self, type, value, tb):
+        shutil.rmtree(self._working_dir)
 
-        # Determie time delay
-        pairs = find_freq_pairs(ft_dict1, ft_dict2)
-        delay = find_delay(pairs)
-        samples_per_sec = float(rate) / float(fft_bin_size)
-        seconds = float(delay) / float(samples_per_sec)
+    # Extract audio from video file, save as wav auido file
+    # INPUT: Video file
+    # OUTPUT: Does not return any values, but saves audio as wav file
+    def extract_audio(self, video_file):
+        track_name = os.path.basename(video_file)
+        audio_output = track_name + "WAV.wav"  # !! CHECK TO SEE IF FILE IS IN UPLOADS DIRECTORY
+        output = os.path.join(self._working_dir, audio_output)
+        if not os.path.exists(output):
+            call(filter(None, [
+                    "ffmpeg", "-y",
+                    self._ffmpeg_t_args[0], self._ffmpeg_t_args[1],
+                    "-i", "%s" % video_file,
+                    "-vn",
+                    "-ac", "1",
+                    "-f", "wav",
+                    "%s" % output
+                    ]), stderr=open(os.devnull, 'w'))
+        return output
 
-        #
-        tmp_result.append(-seconds)
+    # Find time delay between two video files
+    def align(self, files, fft_bin_size=1024, overlap=0, box_height=512, box_width=43, samples_per_box=7):
+        tmp_result = [0.0]
 
-    shutil.rmtree(working_dir)
+        # Process first file
+        wavfile1 = self.extract_audio(files[0])
+        raw_audio1, rate = read_audio(wavfile1)
+        bins_dict1 = make_horiz_bins(raw_audio1[:44100 * 120], fft_bin_size, overlap, box_height)  # bins, overlap, box height
+        boxes1 = make_vert_bins(bins_dict1, box_width)  # box width
+        ft_dict1 = find_bin_max(boxes1, samples_per_box)  # samples per box
 
-    result = np.array(tmp_result)
-    result -= result.min()
+        for i in range(len(files) - 1):
+            # Process second file
+            wavfile2 = self.extract_audio(files[i + 1])
+            raw_audio2, rate = read_audio(wavfile2)
+            bins_dict2 = make_horiz_bins(raw_audio2[:44100 * 60], fft_bin_size, overlap, box_height)
+            boxes2 = make_vert_bins(bins_dict2, box_width)
+            ft_dict2 = find_bin_max(boxes2, samples_per_box)
 
-    return list(result)
+            # Determie time delay
+            pairs = find_freq_pairs(ft_dict1, ft_dict2)
+            delay = find_delay(pairs)
+            samples_per_sec = float(rate) / float(fft_bin_size)
+            seconds = float(delay) / float(samples_per_sec)
+
+            #
+            tmp_result.append(-seconds)
+
+        result = np.array(tmp_result)
+        result -= result.min()
+
+        return list(result)
 
 
 def bailout():
@@ -180,6 +192,7 @@ if __name__ == "__main__":
 
     parser = argparse.ArgumentParser(description=DOC)
     parser.add_argument('file_names', nargs="*")
+    parser.add_argument('--max_misalignment', type=int)
     args = parser.parse_args()
 
     if args.file_names and len(args.file_names) >= 2:
@@ -194,7 +207,9 @@ if __name__ == "__main__":
     if non_existing_files:
         print("** The following are not existing files: %s **" % (','.join(non_existing_files),))
         bailout()
-    result = align(file_specs)
+
+    with SyncDetector(args.max_misalignment) as det:
+        result = det.align(file_specs)
 
     report = []
     for i, path in enumerate(file_specs):
