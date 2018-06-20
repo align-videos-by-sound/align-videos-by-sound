@@ -24,7 +24,6 @@ from collections import defaultdict
 import scipy.io.wavfile
 import numpy as np
 from subprocess import call
-import math
 import tempfile
 import shutil
 
@@ -83,14 +82,9 @@ def make_horiz_bins(data, fft_bin_size, overlap, box_height):
 # INPUT: list with length of number of samples per second
 # OUTPUT: list of real values len of num samples per second
 def fourier(sample):  # , overlap):
-    mag = []
     fft_data = np.fft.fft(sample)  # Returns real and complex value pairs
-    for i in range(len(fft_data) // 2):
-        r = fft_data[i].real ** 2
-        j = fft_data[i].imag ** 2
-        mag.append(round(math.sqrt(r + j), 2))
-
-    return mag
+    fft_data = fft_data[:len(fft_data) // 2]
+    return list(np.sqrt(fft_data.real**2 + fft_data.imag**2))
 
 
 def make_vert_bins(horiz_bins, box_width):
