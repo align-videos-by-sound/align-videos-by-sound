@@ -157,70 +157,72 @@ def find_delay(time_pairs):
 
 
 # Find time delay between two video files
-def align(file1, file2, fft_bin_size=1024, overlap=0, box_height=512, box_width=43, samples_per_box=7):
+def align(files, fft_bin_size=1024, overlap=0, box_height=512, box_width=43, samples_per_box=7):
+    tmp_result = [0.0]
+
     # Process first file
     working_dir = tempfile.mkdtemp()
-    wavfile1 = extract_audio(working_dir, file1)
+    wavfile1 = extract_audio(working_dir, files[0])
     raw_audio1, rate = read_audio(wavfile1)
     bins_dict1 = make_horiz_bins(raw_audio1[:44100 * 120], fft_bin_size, overlap, box_height)  # bins, overlap, box height
     boxes1 = make_vert_bins(bins_dict1, box_width)  # box width
     ft_dict1 = find_bin_max(boxes1, samples_per_box)  # samples per box
 
-    # Process second file
-    wavfile2 = extract_audio(working_dir, file2)
-    raw_audio2, rate = read_audio(wavfile2)
-    bins_dict2 = make_horiz_bins(raw_audio2[:44100 * 60], fft_bin_size, overlap, box_height)
-    boxes2 = make_vert_bins(bins_dict2, box_width)
-    ft_dict2 = find_bin_max(boxes2, samples_per_box)
+    for i in range(len(files) - 1):
+        # Process second file
+        wavfile2 = extract_audio(working_dir, files[i + 1])
+        raw_audio2, rate = read_audio(wavfile2)
+        bins_dict2 = make_horiz_bins(raw_audio2[:44100 * 60], fft_bin_size, overlap, box_height)
+        boxes2 = make_vert_bins(bins_dict2, box_width)
+        ft_dict2 = find_bin_max(boxes2, samples_per_box)
 
-    # Determie time delay
-    pairs = find_freq_pairs(ft_dict1, ft_dict2)
-    delay = find_delay(pairs)
-    samples_per_sec = float(rate) / float(fft_bin_size)
-    seconds = float(delay) / float(samples_per_sec)
+        # Determie time delay
+        pairs = find_freq_pairs(ft_dict1, ft_dict2)
+        delay = find_delay(pairs)
+        samples_per_sec = float(rate) / float(fft_bin_size)
+        seconds = float(delay) / float(samples_per_sec)
+
+        #
+        tmp_result.append(-seconds)
+
     shutil.rmtree(working_dir)
-    if seconds > 0:
-        return (seconds, 0)
-    else:
-        return (0, abs(seconds))
+
+    result = np.array(tmp_result)
+    result -= result.min()
+
+    return list(result)
 
 
 def bailout():
     print(DOC)
     sys.exit()
 
+
 if __name__ == "__main__":
 
-    if args.file_names and len(args.file_names) == 2:
-        file_specs = args.file_names
+    if args.file_names and len(args.file_names) >= 2:
+        file_specs = list(map(os.path.abspath, args.file_names))
         # print(file_specs)
     else:  # No pipe and no input file, print help text and exit
         bailout()
-    file1 = os.path.abspath(file_specs[0])
-    file2 = os.path.abspath(file_specs[1])
     non_existing_files = []
-    if not os.path.isfile(file1):
-        non_existing_files.append(file1)
-    if not os.path.isfile(file2):
-        non_existing_files.append(file2)
+    for path in file_specs:
+        if not os.path.isfile(path):
+            non_existing_files.append(path)
     if non_existing_files:
         print("** The following are not existing files: %s **" % (','.join(non_existing_files),))
         bailout()
-    result = align(file1, file2)
-    in_sync = False
-    if result[0]:
-        first_started_recording = file2
-        last_started_recording = file1
-        trunc_amount = result[0]
-    elif result[1]:
-        first_started_recording = file1
-        last_started_recording = file2
-        trunc_amount = result[1]
-    else:
-        in_sync = True
+    result = align(file_specs)
 
-    if in_sync:
-        print("files are in sync already")
+    report = []
+    for i, path in enumerate(file_specs):
+        if not (result[i] > 0):
+            continue
+        report.append("""\
+            The file '%s' needs to be have its beginning truncated by %.4f seconds for the files' soundtracks to match""" % (
+                path, result[i]))
+    if report:
+        print("Result:")
+        print("\n".join(report))
     else:
-        print("""Result:
-            The file '%s' needs to be have its beginning truncated by %.4f seconds for the files' soundtracks to match""" % (first_started_recording, trunc_amount))
+        print("files are in sync already")
