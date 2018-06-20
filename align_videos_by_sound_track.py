@@ -27,17 +27,11 @@ from subprocess import call
 import math
 import tempfile
 import shutil
-import argparse
-parser = argparse.ArgumentParser(description=DOC)
-parser.add_argument('file_names', nargs="*")
 
 
-args = parser.parse_args()
 # Extract audio from video file, save as wav auido file
 # INPUT: Video file
 # OUTPUT: Does not return any values, but saves audio as wav file
-
-
 def extract_audio(dir, video_file):
     track_name = os.path.basename(video_file)
     audio_output = track_name + "WAV.wav"  # !! CHECK TO SEE IF FILE IS IN UPLOADS DIRECTORY
@@ -199,6 +193,11 @@ def bailout():
 
 
 if __name__ == "__main__":
+    import argparse
+
+    parser = argparse.ArgumentParser(description=DOC)
+    parser.add_argument('file_names', nargs="*")
+    args = parser.parse_args()
 
     if args.file_names and len(args.file_names) >= 2:
         file_specs = list(map(os.path.abspath, args.file_names))
