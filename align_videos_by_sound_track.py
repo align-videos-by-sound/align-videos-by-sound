@@ -56,17 +56,15 @@ def read_audio(audio_file):
 
 
 def make_horiz_bins(data, fft_bin_size, overlap, box_height):
-    horiz_bins = {}
+    horiz_bins = defaultdict(list)
     # process first sample and set matrix height
     sample_data = data[0:fft_bin_size]  # get data for first sample
     if (len(sample_data) == fft_bin_size):  # if there are enough audio points left to create a full fft bin
         intensities = fourier(sample_data)  # intensities is list of fft results
         for i in range(len(intensities)):
             box_y = i // box_height
-            if box_y in horiz_bins:
-                horiz_bins[box_y].append((intensities[i], 0, i))  # (intensity, x, y)
-            else:
-                horiz_bins[box_y] = [(intensities[i], 0, i)]
+            horiz_bins[box_y].append((intensities[i], 0, i))  # (intensity, x, y)
+
     # process remainder of samples
     x_coord_counter = 1  # starting at second sample, with x index 1
     for j in range(int(fft_bin_size - overlap), len(data), int(fft_bin_size - overlap)):
@@ -75,10 +73,7 @@ def make_horiz_bins(data, fft_bin_size, overlap, box_height):
             intensities = fourier(sample_data)
             for k in range(len(intensities)):
                 box_y = k // box_height
-                if box_y in horiz_bins:
-                    horiz_bins[box_y].append((intensities[k], x_coord_counter, k))  # (intensity, x, y)
-                else:
-                    horiz_bins[box_y] = [(intensities[k], x_coord_counter, k)]
+                horiz_bins[box_y].append((intensities[k], x_coord_counter, k))  # (intensity, x, y)
         x_coord_counter += 1
 
     return horiz_bins
@@ -99,20 +94,17 @@ def fourier(sample):  # , overlap):
 
 
 def make_vert_bins(horiz_bins, box_width):
-    boxes = {}
+    boxes = defaultdict(list)
     for key in list(horiz_bins.keys()):
         for i in range(len(horiz_bins[key])):
             box_x = horiz_bins[key][i][1] // box_width
-            if (box_x, key) in boxes:
-                boxes[(box_x, key)].append((horiz_bins[key][i]))
-            else:
-                boxes[(box_x, key)] = [(horiz_bins[key][i])]
+            boxes[(box_x, key)].append((horiz_bins[key][i]))
 
     return boxes
 
 
 def find_bin_max(boxes, maxes_per_box):
-    freqs_dict = {}
+    freqs_dict = defaultdict(list)
     for key in list(boxes.keys()):
         max_intensities = [(1, 2, 3)]
         for i in range(len(boxes[key])):
@@ -123,10 +115,7 @@ def find_bin_max(boxes, maxes_per_box):
                     max_intensities.append(boxes[key][i])
                     max_intensities.remove(min(max_intensities))
         for j in range(len(max_intensities)):
-            if max_intensities[j][2] in freqs_dict:
-                freqs_dict[max_intensities[j][2]].append(max_intensities[j][1])
-            else:
-                freqs_dict[max_intensities[j][2]] = [max_intensities[j][1]]
+            freqs_dict[max_intensities[j][2]].append(max_intensities[j][1])
 
     return freqs_dict
 
