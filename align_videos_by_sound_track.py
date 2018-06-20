@@ -218,8 +218,7 @@ if __name__ == "__main__":
     for i, path in enumerate(file_specs):
         if not (result[i] > 0):
             continue
-        report.append("""\
-            The file '%s' needs to be have its beginning truncated by %.4f seconds for the files' soundtracks to match""" % (
+        report.append("""Result: The beginning of '%s' needs to be cropped %.4f seconds for files to be in sync""" % (
                 path, result[i]))
     if report:
         print("Result:")
