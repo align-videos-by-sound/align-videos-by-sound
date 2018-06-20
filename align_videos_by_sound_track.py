@@ -221,7 +221,6 @@ if __name__ == "__main__":
         report.append("""Result: The beginning of '%s' needs to be cropped %.4f seconds for files to be in sync""" % (
                 path, result[i]))
     if report:
-        print("Result:")
         print("\n".join(report))
     else:
         print("files are in sync already")
