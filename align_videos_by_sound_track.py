@@ -15,7 +15,7 @@ It reports back the offset. Example:
 
     %s good_video_shitty_audio.mp4 good_audio_shitty_video.mp4
 
-    Result: The beginning of good_video_shitty_audio.mp4 needs to be cropped 11.348 seconds for files to be in sync
+    Result: The beginning of good_video_shitty_audio.mp4 needs to be cropped 11.348 seconds for all files to be in sync
 
 ''' % (__file__, __file__)
 import os
@@ -189,10 +189,12 @@ def bailout():
 
 if __name__ == "__main__":
     import argparse
+    import json
 
     parser = argparse.ArgumentParser(description=DOC)
-    parser.add_argument('file_names', nargs="*")
     parser.add_argument('--max_misalignment', type=int)
+    parser.add_argument('--json', action="store_true",)
+    parser.add_argument('file_names', nargs="*")
     args = parser.parse_args()
 
     if args.file_names and len(args.file_names) >= 2:
@@ -212,14 +214,16 @@ if __name__ == "__main__":
         result = det.align(file_specs)
         max_late = max(result)
     crop_amounts = [-(offset - max_late) for offset in result]
-    
-    report = []
-    for i, path in enumerate(file_specs):
-        if not (crop_amounts[i] > 0):
-            continue
-        report.append("""Result: The beginning of '%s' needs to be cropped %.4f seconds for all files to be in sync""" % (
-                path, crop_amounts[i]))
-    if report:
-        print("\n".join(report))
+    if args.json:
+        print(json.dumps({'edit_list':list(zip(file_specs, crop_amounts))}))
     else:
-        print("files are in sync already")
+        report = []
+        for i, path in enumerate(file_specs):
+            if not (crop_amounts[i] > 0):
+                continue
+            report.append("""Result: The beginning of '%s' needs to be cropped %.4f seconds for all files to be in sync""" % (
+                    path, crop_amounts[i]))
+        if report:
+            print("\n".join(report))
+        else:
+            print("files are in sync already")
