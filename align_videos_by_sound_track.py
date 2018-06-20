@@ -15,7 +15,7 @@ It reports back the offset. Example:
 
     %s good_video_shitty_audio.mp4 good_audio_shitty_video.mp4
 
-    Result: The beginning of good_video_shitty_audio.mp4 needs to be cropped 11.348 seconds for all files to be in sync
+    Result: The beginning of good_video_shitty_audio.mp4 needs to be trimmed off 11.348 seconds for all files to be in sync
 
 ''' % (__file__, __file__)
 import os
@@ -221,7 +221,7 @@ if __name__ == "__main__":
         for i, path in enumerate(file_specs):
             if not (crop_amounts[i] > 0):
                 continue
-            report.append("""Result: The beginning of '%s' needs to be cropped %.4f seconds for all files to be in sync""" % (
+            report.append("""Result: The beginning of '%s' needs to be trimmed off %.4f seconds for all files to be in sync""" % (
                     path, crop_amounts[i]))
         if report:
             print("\n".join(report))
