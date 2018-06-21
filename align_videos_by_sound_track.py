@@ -76,10 +76,9 @@ def find_bin_max(boxes, maxes_per_box):
         max_intensities = [(1, 2, 3)]
         for i in range(len(boxes[key])):
             if boxes[key][i][0] > min(max_intensities)[0]:
-                if len(max_intensities) < maxes_per_box:  # add if < number of points per box
-                    max_intensities.append(boxes[key][i])
-                else:  # else add new number and remove min
-                    max_intensities.append(boxes[key][i])
+                max_intensities.append(boxes[key][i])
+                if len(max_intensities) > maxes_per_box:
+                    # If it exceeds maxes_per_box, delete the min.
                     max_intensities.remove(min(max_intensities))
         for j in range(len(max_intensities)):
             freqs_dict[max_intensities[j][2]].append(max_intensities[j][1])
