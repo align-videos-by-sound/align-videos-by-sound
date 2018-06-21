@@ -73,13 +73,7 @@ def make_vert_bins(horiz_bins, box_width):
 def find_bin_max(boxes, maxes_per_box):
     freqs_dict = defaultdict(list)
     for key in list(boxes.keys()):
-        max_intensities = [(1, 2, 3)]
-        for i in range(len(boxes[key])):
-            if boxes[key][i][0] > min(max_intensities)[0]:
-                max_intensities.append(boxes[key][i])
-                if len(max_intensities) > maxes_per_box:
-                    # If it exceeds maxes_per_box, delete the min.
-                    max_intensities.remove(min(max_intensities))
+        max_intensities = sorted(boxes[key], key=lambda x: -x[0])[:maxes_per_box]
         for j in range(len(max_intensities)):
             freqs_dict[max_intensities[j][2]].append(max_intensities[j][1])
 
