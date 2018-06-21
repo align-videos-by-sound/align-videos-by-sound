@@ -38,24 +38,15 @@ def read_audio(audio_file):
 
 def make_horiz_bins(data, fft_bin_size, overlap, box_height):
     horiz_bins = defaultdict(list)
-    # process first sample and set matrix height
-    sample_data = data[0:fft_bin_size]  # get data for first sample
-    if (len(sample_data) == fft_bin_size):  # if there are enough audio points left to create a full fft bin
-        intensities = fourier(sample_data)  # intensities is list of fft results
-        for i in range(len(intensities)):
-            box_y = i // box_height
-            horiz_bins[box_y].append((intensities[i], 0, i))  # (intensity, x, y)
 
-    # process remainder of samples
-    x_coord_counter = 1  # starting at second sample, with x index 1
-    for j in range(int(fft_bin_size - overlap), len(data), int(fft_bin_size - overlap)):
-        sample_data = data[j:j + fft_bin_size]
-        if (len(sample_data) == fft_bin_size):
-            intensities = fourier(sample_data)
-            for k in range(len(intensities)):
-                box_y = k // box_height
-                horiz_bins[box_y].append((intensities[k], x_coord_counter, k))  # (intensity, x, y)
-        x_coord_counter += 1
+    # process sample and set matrix height
+    for x, j in enumerate(range(int(-overlap), len(data), int(fft_bin_size - overlap))):
+        sample_data = data[max(0, j):max(0, j) + fft_bin_size]
+        if (len(sample_data) == fft_bin_size):  # if there are enough audio points left to create a full fft bin
+            intensities = fourier(sample_data)  # intensities is list of fft results
+            for i in range(len(intensities)):
+                box_y = i // box_height
+                horiz_bins[box_y].append((intensities[i], x, i))  # (intensity, x, y)
 
     return horiz_bins
 
