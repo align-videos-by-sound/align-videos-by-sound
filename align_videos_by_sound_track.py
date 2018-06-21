@@ -116,12 +116,13 @@ def find_delay(time_pairs):
 
 
 class SyncDetector(object):
-    def __init__(self, max_misalignment=0):
+    def __init__(self, max_misalignment=0, sample_rate=48000):
         self._working_dir = tempfile.mkdtemp()
         if max_misalignment and max_misalignment > 0:
             self._ffmpeg_t_args = ("-t", "%d" % max_misalignment)
         else:
             self._ffmpeg_t_args = (None, None)
+        self._sample_rate = sample_rate
 
     def __enter__(self):
         return self
@@ -142,6 +143,7 @@ class SyncDetector(object):
                     self._ffmpeg_t_args[0], self._ffmpeg_t_args[1],
                     "-i", "%s" % video_file,
                     "-vn",
+                    "-ar", "%d" % self._sample_rate,
                     "-ac", "1",
                     "-f", "wav",
                     "%s" % output
@@ -155,7 +157,9 @@ class SyncDetector(object):
         # Process first file
         wavfile1 = self.extract_audio(files[0])
         raw_audio1, rate = read_audio(wavfile1)
-        bins_dict1 = make_horiz_bins(raw_audio1[:44100 * 120], fft_bin_size, overlap, box_height)  # bins, overlap, box height
+        bins_dict1 = make_horiz_bins(
+            raw_audio1[:self._sample_rate * 120],
+            fft_bin_size, overlap, box_height)  # bins, overlap, box height
         boxes1 = make_vert_bins(bins_dict1, box_width)  # box width
         ft_dict1 = find_bin_max(boxes1, samples_per_box)  # samples per box
 
@@ -163,7 +167,9 @@ class SyncDetector(object):
             # Process second file
             wavfile2 = self.extract_audio(files[i + 1])
             raw_audio2, rate = read_audio(wavfile2)
-            bins_dict2 = make_horiz_bins(raw_audio2[:44100 * 60], fft_bin_size, overlap, box_height)
+            bins_dict2 = make_horiz_bins(
+                raw_audio2[:self._sample_rate * 60],
+                fft_bin_size, overlap, box_height)
             boxes2 = make_vert_bins(bins_dict2, box_width)
             ft_dict2 = find_bin_max(boxes2, samples_per_box)
 
