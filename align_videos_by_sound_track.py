@@ -152,7 +152,7 @@ class SyncDetector(object):
             wavfile2 = self.extract_audio(files[i + 1])
             raw_audio2, rate = read_audio(wavfile2)
             bins_dict2 = make_horiz_bins(
-                raw_audio2[:self._sample_rate * 60],
+                raw_audio2[:self._sample_rate * 120],
                 fft_bin_size, overlap, box_height)
             boxes2 = make_vert_bins(bins_dict2, box_width)
             ft_dict2 = find_bin_max(boxes2, samples_per_box)
