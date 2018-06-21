@@ -142,7 +142,7 @@ class SyncDetector(object):
         wavfile1 = self.extract_audio(files[0])
         raw_audio1, rate = read_audio(wavfile1)
         bins_dict1 = make_horiz_bins(
-            raw_audio1[:self._sample_rate * 120],
+            raw_audio1,
             fft_bin_size, overlap, box_height)  # bins, overlap, box height
         boxes1 = make_vert_bins(bins_dict1, box_width)  # box width
         ft_dict1 = find_bin_max(boxes1, samples_per_box)  # samples per box
@@ -152,7 +152,7 @@ class SyncDetector(object):
             wavfile2 = self.extract_audio(files[i + 1])
             raw_audio2, rate = read_audio(wavfile2)
             bins_dict2 = make_horiz_bins(
-                raw_audio2[:self._sample_rate * 120],
+                raw_audio2,
                 fft_bin_size, overlap, box_height)
             boxes2 = make_vert_bins(bins_dict2, box_width)
             ft_dict2 = find_bin_max(boxes2, samples_per_box)
@@ -182,7 +182,7 @@ if __name__ == "__main__":
     import json
 
     parser = argparse.ArgumentParser(description=DOC)
-    parser.add_argument('--max_misalignment', type=int)
+    parser.add_argument('--max_misalignment', type=int, default=4*60)
     parser.add_argument('--json', action="store_true",)
     parser.add_argument('file_names', nargs="*")
     args = parser.parse_args()
