@@ -21,11 +21,13 @@ It reports back the offset. Example:
 import os
 import sys
 from collections import defaultdict
-import scipy.io.wavfile
-import numpy as np
 from subprocess import call
 import tempfile
 import shutil
+import logging
+
+import numpy as np
+import scipy.io.wavfile
 
 
 # Read file
@@ -100,13 +102,14 @@ def find_delay(time_pairs):
 
 
 class SyncDetector(object):
-    def __init__(self, max_misalignment=0, sample_rate=48000):
+    def __init__(self, max_misalignment=0, sample_rate=48000, known_delay_ge_map={}):
         self._working_dir = tempfile.mkdtemp()
         if max_misalignment and max_misalignment > 0:
             self._ffmpeg_t_args = ("-t", "%d" % (max_misalignment * 2))
         else:
             self._ffmpeg_t_args = (None, None)
         self._sample_rate = sample_rate
+        self._known_delay_ge_map = known_delay_ge_map
 
     def __enter__(self):
         return self
@@ -115,15 +118,26 @@ class SyncDetector(object):
         shutil.rmtree(self._working_dir)
 
     # Extract audio from video file, save as wav auido file
-    # INPUT: Video file
+    # INPUT: Video file, and its index of input file list
     # OUTPUT: Does not return any values, but saves audio as wav file
-    def extract_audio(self, video_file):
+    def extract_audio(self, video_file, idx):
+        _ffmpeg_ss_args = (None, None)
+        if idx in self._known_delay_ge_map:
+            ss_h = self._known_delay_ge_map[idx] // 3600
+            ss_m = self._known_delay_ge_map[idx] // 60
+            ss_s = self._known_delay_ge_map[idx] % 60
+            _ffmpeg_ss_args = (
+                "-ss",
+                "%02d:%02d:%02d.000" % (ss_h, ss_m, ss_s)
+                )
+
         track_name = os.path.basename(video_file)
         audio_output = track_name + "WAV.wav"  # !! CHECK TO SEE IF FILE IS IN UPLOADS DIRECTORY
         output = os.path.join(self._working_dir, audio_output)
         if not os.path.exists(output):
             call(filter(None, [
                     "ffmpeg", "-y",
+                    _ffmpeg_ss_args[0], _ffmpeg_ss_args[1],
                     self._ffmpeg_t_args[0], self._ffmpeg_t_args[1],
                     "-i", "%s" % video_file,
                     "-vn",
@@ -139,7 +153,7 @@ class SyncDetector(object):
         tmp_result = [0.0]
 
         # Process first file
-        wavfile1 = self.extract_audio(files[0])
+        wavfile1 = self.extract_audio(files[0], 0)
         raw_audio1, rate = read_audio(wavfile1)
         bins_dict1 = make_horiz_bins(
             raw_audio1,
@@ -151,7 +165,7 @@ class SyncDetector(object):
 
         for i in range(len(files) - 1):
             # Process second file
-            wavfile2 = self.extract_audio(files[i + 1])
+            wavfile2 = self.extract_audio(files[i + 1], i + 1)
             raw_audio2, rate = read_audio(wavfile2)
             bins_dict2 = make_horiz_bins(
                 raw_audio2,
@@ -171,6 +185,12 @@ class SyncDetector(object):
             tmp_result.append(-seconds)
 
         result = np.array(tmp_result)
+        if self._known_delay_ge_map:
+            for i in range(len(result)):
+                if i in self._known_delay_ge_map:
+                    result += self._known_delay_ge_map[i]
+                    result[i] -= self._known_delay_ge_map[i]
+
         result -= result.min()
 
         return list(result)
@@ -187,9 +207,19 @@ if __name__ == "__main__":
 
     parser = argparse.ArgumentParser(description=DOC)
     parser.add_argument('--max_misalignment', type=int, default=2*60)
+    parser.add_argument('--known_delay_ge_map', type=str)
     parser.add_argument('--json', action="store_true",)
     parser.add_argument('file_names', nargs="*")
     args = parser.parse_args()
+    known_delay_ge_map = {}
+    if args.known_delay_ge_map:
+        known_delay_ge_map = json.loads(args.known_delay_ge_map)
+        known_delay_ge_map = {
+            int(k): known_delay_ge_map[k]
+            for k in known_delay_ge_map.keys()
+            }
+
+    logging.basicConfig(level=logging.DEBUG, stream=sys.stderr)
 
     if args.file_names and len(args.file_names) >= 2:
         file_specs = list(map(os.path.abspath, args.file_names))
@@ -204,7 +234,7 @@ if __name__ == "__main__":
         print("** The following are not existing files: %s **" % (','.join(non_existing_files),))
         bailout()
 
-    with SyncDetector(args.max_misalignment) as det:
+    with SyncDetector(args.max_misalignment, known_delay_ge_map=known_delay_ge_map) as det:
         result = det.align(file_specs)
         max_late = max(result)
     crop_amounts = [-(offset - max_late) for offset in result]
