@@ -21,11 +21,13 @@ It reports back the offset. Example:
 import os
 import sys
 from collections import defaultdict
-import scipy.io.wavfile
-import numpy as np
 from subprocess import call
 import tempfile
 import shutil
+import logging
+
+import numpy as np
+import scipy.io.wavfile
 
 
 # Read file
@@ -38,24 +40,15 @@ def read_audio(audio_file):
 
 def make_horiz_bins(data, fft_bin_size, overlap, box_height):
     horiz_bins = defaultdict(list)
-    # process first sample and set matrix height
-    sample_data = data[0:fft_bin_size]  # get data for first sample
-    if (len(sample_data) == fft_bin_size):  # if there are enough audio points left to create a full fft bin
-        intensities = fourier(sample_data)  # intensities is list of fft results
-        for i in range(len(intensities)):
-            box_y = i // box_height
-            horiz_bins[box_y].append((intensities[i], 0, i))  # (intensity, x, y)
 
-    # process remainder of samples
-    x_coord_counter = 1  # starting at second sample, with x index 1
-    for j in range(int(fft_bin_size - overlap), len(data), int(fft_bin_size - overlap)):
-        sample_data = data[j:j + fft_bin_size]
-        if (len(sample_data) == fft_bin_size):
-            intensities = fourier(sample_data)
-            for k in range(len(intensities)):
-                box_y = k // box_height
-                horiz_bins[box_y].append((intensities[k], x_coord_counter, k))  # (intensity, x, y)
-        x_coord_counter += 1
+    # process sample and set matrix height
+    for x, j in enumerate(range(int(-overlap), len(data), int(fft_bin_size - overlap))):
+        sample_data = data[max(0, j):max(0, j) + fft_bin_size]
+        if (len(sample_data) == fft_bin_size):  # if there are enough audio points left to create a full fft bin
+            intensities = fourier(sample_data)  # intensities is list of fft results
+            for i in range(len(intensities)):
+                box_y = i // box_height
+                horiz_bins[box_y].append((intensities[i], x, i))  # (intensity, x, y)
 
     return horiz_bins
 
@@ -82,14 +75,7 @@ def make_vert_bins(horiz_bins, box_width):
 def find_bin_max(boxes, maxes_per_box):
     freqs_dict = defaultdict(list)
     for key in list(boxes.keys()):
-        max_intensities = [(1, 2, 3)]
-        for i in range(len(boxes[key])):
-            if boxes[key][i][0] > min(max_intensities)[0]:
-                if len(max_intensities) < maxes_per_box:  # add if < number of points per box
-                    max_intensities.append(boxes[key][i])
-                else:  # else add new number and remove min
-                    max_intensities.append(boxes[key][i])
-                    max_intensities.remove(min(max_intensities))
+        max_intensities = sorted(boxes[key], key=lambda x: -x[0])[:maxes_per_box]
         for j in range(len(max_intensities)):
             freqs_dict[max_intensities[j][2]].append(max_intensities[j][1])
 
@@ -116,12 +102,14 @@ def find_delay(time_pairs):
 
 
 class SyncDetector(object):
-    def __init__(self, max_misalignment=0):
+    def __init__(self, max_misalignment=0, sample_rate=48000, known_delay_ge_map={}):
         self._working_dir = tempfile.mkdtemp()
         if max_misalignment and max_misalignment > 0:
-            self._ffmpeg_t_args = ("-t", "%d" % max_misalignment)
+            self._ffmpeg_t_args = ("-t", "%d" % (max_misalignment * 2))
         else:
             self._ffmpeg_t_args = (None, None)
+        self._sample_rate = sample_rate
+        self._known_delay_ge_map = known_delay_ge_map
 
     def __enter__(self):
         return self
@@ -130,18 +118,30 @@ class SyncDetector(object):
         shutil.rmtree(self._working_dir)
 
     # Extract audio from video file, save as wav auido file
-    # INPUT: Video file
+    # INPUT: Video file, and its index of input file list
     # OUTPUT: Does not return any values, but saves audio as wav file
-    def extract_audio(self, video_file):
+    def extract_audio(self, video_file, idx):
+        _ffmpeg_ss_args = (None, None)
+        if idx in self._known_delay_ge_map:
+            ss_h = self._known_delay_ge_map[idx] // 3600
+            ss_m = self._known_delay_ge_map[idx] // 60
+            ss_s = self._known_delay_ge_map[idx] % 60
+            _ffmpeg_ss_args = (
+                "-ss",
+                "%02d:%02d:%02d.000" % (ss_h, ss_m, ss_s)
+                )
+
         track_name = os.path.basename(video_file)
         audio_output = track_name + "WAV.wav"  # !! CHECK TO SEE IF FILE IS IN UPLOADS DIRECTORY
         output = os.path.join(self._working_dir, audio_output)
         if not os.path.exists(output):
             call(filter(None, [
                     "ffmpeg", "-y",
+                    _ffmpeg_ss_args[0], _ffmpeg_ss_args[1],
                     self._ffmpeg_t_args[0], self._ffmpeg_t_args[1],
                     "-i", "%s" % video_file,
                     "-vn",
+                    "-ar", "%d" % self._sample_rate,
                     "-ac", "1",
                     "-f", "wav",
                     "%s" % output
@@ -153,19 +153,27 @@ class SyncDetector(object):
         tmp_result = [0.0]
 
         # Process first file
-        wavfile1 = self.extract_audio(files[0])
+        wavfile1 = self.extract_audio(files[0], 0)
         raw_audio1, rate = read_audio(wavfile1)
-        bins_dict1 = make_horiz_bins(raw_audio1[:44100 * 120], fft_bin_size, overlap, box_height)  # bins, overlap, box height
+        bins_dict1 = make_horiz_bins(
+            raw_audio1,
+            fft_bin_size, overlap, box_height)  # bins, overlap, box height
+        del raw_audio1
         boxes1 = make_vert_bins(bins_dict1, box_width)  # box width
         ft_dict1 = find_bin_max(boxes1, samples_per_box)  # samples per box
+        del boxes1
 
         for i in range(len(files) - 1):
             # Process second file
-            wavfile2 = self.extract_audio(files[i + 1])
+            wavfile2 = self.extract_audio(files[i + 1], i + 1)
             raw_audio2, rate = read_audio(wavfile2)
-            bins_dict2 = make_horiz_bins(raw_audio2[:44100 * 60], fft_bin_size, overlap, box_height)
+            bins_dict2 = make_horiz_bins(
+                raw_audio2,
+                fft_bin_size, overlap, box_height)
+            del raw_audio2
             boxes2 = make_vert_bins(bins_dict2, box_width)
             ft_dict2 = find_bin_max(boxes2, samples_per_box)
+            del boxes2
 
             # Determie time delay
             pairs = find_freq_pairs(ft_dict1, ft_dict2)
@@ -177,6 +185,12 @@ class SyncDetector(object):
             tmp_result.append(-seconds)
 
         result = np.array(tmp_result)
+        if self._known_delay_ge_map:
+            for i in range(len(result)):
+                if i in self._known_delay_ge_map:
+                    result += self._known_delay_ge_map[i]
+                    result[i] -= self._known_delay_ge_map[i]
+
         result -= result.min()
 
         return list(result)
@@ -192,10 +206,20 @@ if __name__ == "__main__":
     import json
 
     parser = argparse.ArgumentParser(description=DOC)
-    parser.add_argument('--max_misalignment', type=int)
+    parser.add_argument('--max_misalignment', type=int, default=2*60)
+    parser.add_argument('--known_delay_ge_map', type=str)
     parser.add_argument('--json', action="store_true",)
     parser.add_argument('file_names', nargs="*")
     args = parser.parse_args()
+    known_delay_ge_map = {}
+    if args.known_delay_ge_map:
+        known_delay_ge_map = json.loads(args.known_delay_ge_map)
+        known_delay_ge_map = {
+            int(k): known_delay_ge_map[k]
+            for k in known_delay_ge_map.keys()
+            }
+
+    logging.basicConfig(level=logging.DEBUG, stream=sys.stderr)
 
     if args.file_names and len(args.file_names) >= 2:
         file_specs = list(map(os.path.abspath, args.file_names))
@@ -210,7 +234,7 @@ if __name__ == "__main__":
         print("** The following are not existing files: %s **" % (','.join(non_existing_files),))
         bailout()
 
-    with SyncDetector(args.max_misalignment) as det:
+    with SyncDetector(args.max_misalignment, known_delay_ge_map=known_delay_ge_map) as det:
         result = det.align(file_specs)
         max_late = max(result)
     crop_amounts = [-(offset - max_late) for offset in result]
