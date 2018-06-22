@@ -144,8 +144,10 @@ class SyncDetector(object):
         bins_dict1 = make_horiz_bins(
             raw_audio1,
             fft_bin_size, overlap, box_height)  # bins, overlap, box height
+        del raw_audio1
         boxes1 = make_vert_bins(bins_dict1, box_width)  # box width
         ft_dict1 = find_bin_max(boxes1, samples_per_box)  # samples per box
+        del boxes1
 
         for i in range(len(files) - 1):
             # Process second file
@@ -154,8 +156,10 @@ class SyncDetector(object):
             bins_dict2 = make_horiz_bins(
                 raw_audio2,
                 fft_bin_size, overlap, box_height)
+            del raw_audio2
             boxes2 = make_vert_bins(bins_dict2, box_width)
             ft_dict2 = find_bin_max(boxes2, samples_per_box)
+            del boxes2
 
             # Determie time delay
             pairs = find_freq_pairs(ft_dict1, ft_dict2)
