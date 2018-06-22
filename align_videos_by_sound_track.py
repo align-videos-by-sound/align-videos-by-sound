@@ -103,7 +103,7 @@ class SyncDetector(object):
     def __init__(self, max_misalignment=0, sample_rate=48000):
         self._working_dir = tempfile.mkdtemp()
         if max_misalignment and max_misalignment > 0:
-            self._ffmpeg_t_args = ("-t", "%d" % max_misalignment * 2)
+            self._ffmpeg_t_args = ("-t", "%d" % (max_misalignment * 2))
         else:
             self._ffmpeg_t_args = (None, None)
         self._sample_rate = sample_rate
