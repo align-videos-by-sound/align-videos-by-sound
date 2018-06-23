@@ -1,6 +1,10 @@
 #! /usr/bin/env python
+# -*- coding: utf-8 -*-
+#
 # This script based on alignment_by_row_channels.py by Allison Deal, see
 # https://github.com/allisonnicoledeal/VideoSync/blob/master/alignment_by_row_channels.py
+from __future__ import unicode_literals
+
 DOC = '''
 This program reports the offset difference for audio and video files,
 containing audio recordings from the same event. It relies on ffmpeg being
@@ -21,13 +25,30 @@ It reports back the offset. Example:
 import os
 import sys
 from collections import defaultdict
-from subprocess import call
+import subprocess
 import tempfile
 import shutil
 import logging
 
 import numpy as np
 import scipy.io.wavfile
+
+
+_logger = logging.getLogger(__name__)
+
+
+if hasattr("", "decode"):  # python 2
+    def _encode(s):
+        return s.encode(sys.stdout.encoding)
+
+    def _decode(s):
+        return s.decode(sys.stdout.encoding)
+else:
+    def _encode(s):
+        return s
+
+    def _decode(s):
+        return s
 
 
 # Read file
@@ -95,7 +116,7 @@ def find_delay(time_pairs):
         delta_t = pair[0] - pair[1]
         t_diffs[delta_t] += 1
     t_diffs_sorted = sorted(list(t_diffs.items()), key=lambda x: x[1])
-    # print(t_diffs_sorted)
+    # _logger.debug(t_diffs_sorted)
     time_delay = t_diffs_sorted[-1][0]
 
     return time_delay
@@ -135,7 +156,7 @@ class SyncDetector(object):
         audio_output = track_name + "WAV.wav"  # !! CHECK TO SEE IF FILE IS IN UPLOADS DIRECTORY
         output = os.path.join(self._working_dir, audio_output)
         if not os.path.exists(output):
-            call(filter(None, [
+            cmd = list(filter(None, [
                     "ffmpeg", "-y",
                     _ffmpeg_ss_args[0], _ffmpeg_ss_args[1],
                     self._ffmpeg_t_args[0], self._ffmpeg_t_args[1],
@@ -145,7 +166,9 @@ class SyncDetector(object):
                     "-ac", "1",
                     "-f", "wav",
                     "%s" % output
-                    ]), stderr=open(os.devnull, 'w'))
+                    ]))
+            #logging.debug(cmd)
+            subprocess.check_call(map(_encode, cmd), stderr=open(os.devnull, 'w'))
         return output
 
     # Find time delay between two video files
@@ -222,8 +245,8 @@ if __name__ == "__main__":
     logging.basicConfig(level=logging.DEBUG, stream=sys.stderr)
 
     if args.file_names and len(args.file_names) >= 2:
-        file_specs = list(map(os.path.abspath, args.file_names))
-        # print(file_specs)
+        file_specs = list(map(_decode, map(os.path.abspath, args.file_names)))
+        # _logger.debug(file_specs)
     else:  # No pipe and no input file, print help text and exit
         bailout()
     non_existing_files = []
