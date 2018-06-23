@@ -167,7 +167,7 @@ class SyncDetector(object):
                     "-f", "wav",
                     "%s" % output
                     ]))
-            #logging.debug(cmd)
+            #_logger.debug(cmd)
             subprocess.check_call(map(_encode, cmd), stderr=open(os.devnull, 'w'))
         return output
 
