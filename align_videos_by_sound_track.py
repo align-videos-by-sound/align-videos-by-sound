@@ -214,9 +214,17 @@ class SyncDetector(object):
                     result += self._known_delay_ge_map[i]
                     result[i] -= self._known_delay_ge_map[i]
 
-        result -= result.min()
-
-        return list(result)
+        pad = result - result.min()
+        trim = -(pad - pad.max())
+        return [
+            [files[i], {"trim": trim[i], "pad": pad[i]}]
+            for i in range(len(files))
+            ]
+        # Or, is it easier for us to use a dictionary format?
+        #return {
+        #    files[i]: {"trim": trim[i], "pad": pad[i]}
+        #    for i in range(len(files))
+        #    }
 
 
 def bailout():
@@ -259,17 +267,17 @@ if __name__ == "__main__":
 
     with SyncDetector(args.max_misalignment, known_delay_ge_map=known_delay_ge_map) as det:
         result = det.align(file_specs)
-        max_late = max(result)
-    crop_amounts = [-(offset - max_late) for offset in result]
     if args.json:
-        print(json.dumps({'edit_list':list(zip(file_specs, crop_amounts))}, indent=4))
+        print(json.dumps({'edit_list': result}, indent=4))
     else:
         report = []
         for i, path in enumerate(file_specs):
-            if not (crop_amounts[i] > 0):
+            if not (result[i][1]["trim"] > 0):
                 continue
-            report.append("""Result: The beginning of '%s' needs to be trimmed off %.4f seconds for all files to be in sync""" % (
-                    path, crop_amounts[i]))
+            report.append(
+                """Result: The beginning of '%s' needs to be trimmed off %.4f seconds \
+(or to be added %.4f seconds padding) for all files to be in sync""" % (
+                    path, result[i][1]["trim"], result[i][1]["pad"]))
         if report:
             print("\n".join(report))
         else:
