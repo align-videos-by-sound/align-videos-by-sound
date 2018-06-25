@@ -278,6 +278,17 @@ Please pass it in JSON format, like '{"1": 120}'. The key is an index correspond
 to the file passed as "file_names". The value is the number of seconds, meaning \
 "at least larger than this".''')
     parser.add_argument(
+        '--sample_rate',
+        type=int,
+        default=48000,
+        help='''In this program, delay is examined by unifying all the sample rates \
+of media files into the same one. If this value is the value itself of the media file \
+itself, the result will be more precise. However, this wastes a lot of memory, so you \
+can reduce memory consumption by downsampling (instead losing accuracy a bit). \
+The default value uses quite a lot of memory, but if it changes to a value of, for example, \
+44100, 22050, etc., although a large error of about several tens of milliseconds \
+increases, the processing time is greatly shortened.''')
+    parser.add_argument(
         '--json',
         action="store_true",
         help='To report in json format.',)
@@ -310,7 +321,10 @@ It is possible to pass any media that ffmpeg can handle.',)
         print("** The following are not existing files: %s **" % (','.join(non_existing_files),))
         _bailout(doc)
 
-    with SyncDetector(args.max_misalignment, known_delay_ge_map=known_delay_ge_map) as det:
+    with SyncDetector(
+        max_misalignment=args.max_misalignment,
+        sample_rate=args.sample_rate,
+        known_delay_ge_map=known_delay_ge_map) as det:
         result = det.align(file_specs)
     if args.json:
         print(json.dumps({'edit_list': result}, indent=4))
