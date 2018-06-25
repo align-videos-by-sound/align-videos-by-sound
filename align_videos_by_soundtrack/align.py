@@ -262,16 +262,30 @@ def main(args=sys.argv):
     parser = argparse.ArgumentParser(prog=args[0], usage=_doc_template)
     parser.add_argument(
         '--max_misalignment',
-        type=int, default=2*60)
+        type=int, default=2*60,
+        help='When handling media files with long playback time, \
+it may take a huge amount of time and huge memory. \
+In such a case, by changing this value to a small value, \
+it is possible to indicate the scanning range of the media file to the program.')
     parser.add_argument(
         '--known_delay_ge_map',
-        type=str)
+        type=str,
+        help='''When handling media files with long playback time, \
+furthermore, when the delay time of a certain movie is large,
+it may take a huge amount of time and huge memory. \
+In such a case, you can give a mapping of the delay times that are roughly known. \
+Please pass it in JSON format, like '{"1": 120}'. The key is an index corresponding \
+to the file passed as "file_names". The value is the number of seconds, meaning \
+"at least larger than this".''')
     parser.add_argument(
         '--json',
-        action="store_true",)
+        action="store_true",
+        help='To report in json format.',)
     parser.add_argument(
         'file_names',
-        nargs="*")
+        nargs="*",
+        help='Media files including audio streams. \
+It is possible to pass any media that ffmpeg can handle.',)
     args = parser.parse_args(args[1:])
     known_delay_ge_map = {}
     if args.known_delay_ge_map:
