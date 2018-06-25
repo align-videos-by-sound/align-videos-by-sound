@@ -260,10 +260,18 @@ def main(args=sys.argv):
 
     doc = _doc_template % ({"prog": args[0]})
     parser = argparse.ArgumentParser(prog=args[0], usage=_doc_template)
-    parser.add_argument('--max_misalignment', type=int, default=2*60)
-    parser.add_argument('--known_delay_ge_map', type=str)
-    parser.add_argument('--json', action="store_true",)
-    parser.add_argument('file_names', nargs="*")
+    parser.add_argument(
+        '--max_misalignment',
+        type=int, default=2*60)
+    parser.add_argument(
+        '--known_delay_ge_map',
+        type=str)
+    parser.add_argument(
+        '--json',
+        action="store_true",)
+    parser.add_argument(
+        'file_names',
+        nargs="*")
     args = parser.parse_args(args[1:])
     known_delay_ge_map = {}
     if args.known_delay_ge_map:
