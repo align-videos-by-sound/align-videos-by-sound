@@ -1,0 +1,5 @@
+#! /usr/bin/env python
+# -*- coding: utf-8 -*-
+from align_videos_by_soundtrack.align import main
+
+main()
