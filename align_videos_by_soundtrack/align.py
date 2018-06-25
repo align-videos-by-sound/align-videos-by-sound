@@ -232,7 +232,7 @@ def bailout():
     sys.exit()
 
 
-if __name__ == "__main__":
+def main(args=sys.argv):
     import argparse
     import json
 
@@ -282,3 +282,7 @@ if __name__ == "__main__":
             print("\n".join(report))
         else:
             print("files are in sync already")
+
+
+if __name__ == "__main__":
+    main()
