@@ -12,14 +12,11 @@ the python libraries scipy and numpy.
 from __future__ import unicode_literals
 
 _doc_template = '''
+    %(prog)s <file1> <file2>
+
 This program reports the offset difference for audio and video files,
 containing audio recordings from the same event. It relies on ffmpeg being
 installed and the python libraries scipy and numpy.
-
-
-Usage:
-
-    %(prog)s <file1> <file2>
 
 It reports back the offset. Example:
 
@@ -249,16 +246,15 @@ class SyncDetector(object):
         #    }
 
 
-def _bailout(doc):
-    print(doc)
-    sys.exit()
+def _bailout(parser):
+    parser.print_usage()
+    sys.exit(1)
 
 
 def main(args=sys.argv):
     import argparse
     import json
 
-    doc = _doc_template % ({"prog": args[0]})
     parser = argparse.ArgumentParser(prog=args[0], usage=_doc_template)
     parser.add_argument(
         '--max_misalignment',
@@ -312,14 +308,14 @@ It is possible to pass any media that ffmpeg can handle.',)
         file_specs = list(map(_decode, map(os.path.abspath, args.file_names)))
         # _logger.debug(file_specs)
     else:  # No pipe and no input file, print help text and exit
-        _bailout(doc)
+        _bailout(parser)
     non_existing_files = []
     for path in file_specs:
         if not os.path.isfile(path):
             non_existing_files.append(path)
     if non_existing_files:
         print("** The following are not existing files: %s **" % (','.join(non_existing_files),))
-        _bailout(doc)
+        _bailout(parser)
 
     with SyncDetector(
         max_misalignment=args.max_misalignment,
