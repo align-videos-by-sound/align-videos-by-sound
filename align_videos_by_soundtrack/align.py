@@ -309,10 +309,7 @@ It is possible to pass any media that ffmpeg can handle.',)
         # _logger.debug(file_specs)
     else:  # No pipe and no input file, print help text and exit
         _bailout(parser)
-    non_existing_files = []
-    for path in file_specs:
-        if not os.path.isfile(path):
-            non_existing_files.append(path)
+    non_existing_files = [path for path in file_specs if not os.path.isfile(path)]
     if non_existing_files:
         print("** The following are not existing files: %s **" % (','.join(non_existing_files),))
         _bailout(parser)
