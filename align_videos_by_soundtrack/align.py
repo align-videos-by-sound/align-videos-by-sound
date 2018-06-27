@@ -128,6 +128,7 @@ class SyncDetector(object):
             self._ffmpeg_t_args = (None, None)
         self._sample_rate = sample_rate
         self._known_delay_ge_map = known_delay_ge_map
+        self._orig_infos = {}  # per filename
 
     def __enter__(self):
         return self
@@ -170,6 +171,11 @@ class SyncDetector(object):
             #_logger.debug(cmd)
             communicate.check_call(cmd, stderr=open(os.devnull, 'w'))
         return output
+
+    def _get_media_info(self, fn):
+        if fn not in self._orig_infos:
+            self._orig_infos[fn] = communicate.get_media_info(fn)
+        return self._orig_infos[fn]
 
     def align(self, files, fft_bin_size=1024, overlap=0, box_height=512, box_width=43, samples_per_box=7):
         """
@@ -216,17 +222,28 @@ class SyncDetector(object):
                     result += self._known_delay_ge_map[i]
                     result[i] -= self._known_delay_ge_map[i]
 
-        pad = result - result.min()
-        trim = -(pad - pad.max())
+        # build result
+        pad_pre = result - result.min()
+        trim_pre = -(pad_pre - pad_pre.max())
+        orig_dur = np.array([
+                self._get_media_info(fn)["duration"]
+                for fn in files])
+        pad_post = list(
+            (pad_pre + orig_dur).max() - (pad_pre + orig_dur))
+        trim_post = list(
+            (orig_dur - trim_pre) - (orig_dur - trim_pre).min())
+        #
         return [
-            [files[i], {"trim": trim[i], "pad": pad[i]}]
-            for i in range(len(files))
-            ]
-        # Or, is it easier for us to use a dictionary format?
-        #return {
-        #    files[i]: {"trim": trim[i], "pad": pad[i]}
-        #    for i in range(len(files))
-        #    }
+            [
+                files[i],
+                {
+                    "trim": trim_pre[i],
+                    "pad": pad_pre[i],
+                    "trim_post": trim_post[i],
+                    "pad_post": pad_post[i],
+                    }
+                ]
+            for i in range(len(files))]
 
 
 def _bailout(parser):
