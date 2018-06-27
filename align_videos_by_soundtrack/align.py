@@ -10,6 +10,7 @@ from the same event. It relies on ffmpeg being installed and
 the python libraries scipy and numpy.
 """
 from __future__ import unicode_literals
+from __future__ import absolute_import
 
 _doc_template = '''
     %(prog)s <file1> <file2>
@@ -28,14 +29,13 @@ It reports back the offset. Example:
 import os
 import sys
 from collections import defaultdict
-import subprocess
 import tempfile
 import shutil
 import logging
 
 import numpy as np
-import scipy.io.wavfile
 
+from . import communicate
 
 __all__ = [
     'SyncDetector',
@@ -46,28 +46,11 @@ _logger = logging.getLogger(__name__)
 
 
 if hasattr("", "decode"):  # python 2
-    def _encode(s):
-        return s.encode(sys.stdout.encoding)
-
     def _decode(s):
         return s.decode(sys.stdout.encoding)
 else:
-    def _encode(s):
-        return s
-
     def _decode(s):
         return s
-
-
-def _read_audio(audio_file):
-    """
-    Read file
-
-    INPUT: Audio file
-    OUTPUT: Sets sample rate of wav file, Returns data read from wav file (numpy array of integers)
-    """
-    rate, data = scipy.io.wavfile.read(audio_file)  # Return the sample rate (in samples/sec) and data from a WAV file
-    return data, rate
 
 
 def _make_horiz_bins(data, fft_bin_size, overlap, box_height):
@@ -173,7 +156,7 @@ class SyncDetector(object):
         audio_output = track_name + "WAV.wav"  # !! CHECK TO SEE IF FILE IS IN UPLOADS DIRECTORY
         output = os.path.join(self._working_dir, audio_output)
         if not os.path.exists(output):
-            cmd = list(filter(None, [
+            cmd = [
                     "ffmpeg", "-y",
                     _ffmpeg_ss_args[0], _ffmpeg_ss_args[1],
                     self._ffmpeg_t_args[0], self._ffmpeg_t_args[1],
@@ -183,9 +166,9 @@ class SyncDetector(object):
                     "-ac", "1",
                     "-f", "wav",
                     "%s" % output
-                    ]))
+                    ]
             #_logger.debug(cmd)
-            subprocess.check_call(map(_encode, cmd), stderr=open(os.devnull, 'w'))
+            communicate.check_call(cmd, stderr=open(os.devnull, 'w'))
         return output
 
     def align(self, files, fft_bin_size=1024, overlap=0, box_height=512, box_width=43, samples_per_box=7):
@@ -196,7 +179,7 @@ class SyncDetector(object):
 
         # Process first file
         wavfile1 = self._extract_audio(files[0], 0)
-        raw_audio1, rate = _read_audio(wavfile1)
+        raw_audio1, rate = communicate.read_audio(wavfile1)
         bins_dict1 = _make_horiz_bins(
             raw_audio1,
             fft_bin_size, overlap, box_height)  # bins, overlap, box height
@@ -208,7 +191,7 @@ class SyncDetector(object):
         for i in range(len(files) - 1):
             # Process second file
             wavfile2 = self._extract_audio(files[i + 1], i + 1)
-            raw_audio2, rate = _read_audio(wavfile2)
+            raw_audio2, rate = communicate.read_audio(wavfile2)
             bins_dict2 = _make_horiz_bins(
                 raw_audio2,
                 fft_bin_size, overlap, box_height)
