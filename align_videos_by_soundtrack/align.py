@@ -155,30 +155,25 @@ class SyncDetector(object):
         """
         Find time delays between video files
         """
+        def _each(idx):
+            wavfile = self._extract_audio(files[idx], idx)
+            raw_audio, rate = communicate.read_audio(wavfile)
+            bins_dict = _make_horiz_bins(
+                raw_audio,
+                fft_bin_size, overlap, box_height)  # bins, overlap, box height
+            del raw_audio
+            boxes = _make_vert_bins(bins_dict, box_width)  # box width
+            ft_dict = _find_bin_max(boxes, samples_per_box)  # samples per box
+            del boxes
+            return rate, ft_dict
+        #
         tmp_result = [0.0]
 
         # Process first file
-        wavfile1 = self._extract_audio(files[0], 0)
-        raw_audio1, rate = communicate.read_audio(wavfile1)
-        bins_dict1 = _make_horiz_bins(
-            raw_audio1,
-            fft_bin_size, overlap, box_height)  # bins, overlap, box height
-        del raw_audio1
-        boxes1 = _make_vert_bins(bins_dict1, box_width)  # box width
-        ft_dict1 = _find_bin_max(boxes1, samples_per_box)  # samples per box
-        del boxes1
-
+        rate, ft_dict1 = _each(0)
         for i in range(len(files) - 1):
             # Process second file
-            wavfile2 = self._extract_audio(files[i + 1], i + 1)
-            raw_audio2, rate = communicate.read_audio(wavfile2)
-            bins_dict2 = _make_horiz_bins(
-                raw_audio2,
-                fft_bin_size, overlap, box_height)
-            del raw_audio2
-            boxes2 = _make_vert_bins(bins_dict2, box_width)
-            ft_dict2 = _find_bin_max(boxes2, samples_per_box)
-            del boxes2
+            rate, ft_dict2 = _each(i + 1)
 
             # Determie time delay
             pairs = _find_freq_pairs(ft_dict1, ft_dict2)
