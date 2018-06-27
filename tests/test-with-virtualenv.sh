@@ -4,4 +4,4 @@
 # run this script from the command line on unixish systems with e.g
 # source test-with-virtual-env.sh
 
-../bin/python ../align_videos_by_sound_track.py --json testfiles/7-secs-in.mp4  testfiles/3-secs-in.mp4 testfiles/full.mp4
+../bin/python ../bin/alignment_info_by_sound_track --json testfiles/7-secs-in.mp4  testfiles/3-secs-in.mp4 testfiles/full.mp4
