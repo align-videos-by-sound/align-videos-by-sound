@@ -118,7 +118,7 @@ def get_media_info(filename):
         map(int,
             re.search(
                 rgx,
-                err.decode(sys.stdout.encoding)).group(1, 2, 3, 4)))
+                err.decode("utf-8")).group(1, 2, 3, 4)))
     return {
         "duration": tp[0] * 60 * 60 + tp[1] * 60 + tp[2] + tp[3] / 100.,
         }
