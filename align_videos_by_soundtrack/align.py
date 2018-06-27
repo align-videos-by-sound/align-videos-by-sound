@@ -239,6 +239,7 @@ class SyncDetector(object):
                 {
                     "trim": trim_pre[i],
                     "pad": pad_pre[i],
+                    "orig_duration": orig_dur[i],
                     "trim_post": trim_post[i],
                     "pad_post": pad_post[i],
                     }
