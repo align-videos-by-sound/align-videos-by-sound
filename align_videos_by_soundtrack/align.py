@@ -122,10 +122,7 @@ def _find_delay(time_pairs):
 class SyncDetector(object):
     def __init__(self, max_misalignment=0, sample_rate=48000, known_delay_ge_map={}):
         self._working_dir = tempfile.mkdtemp()
-        if max_misalignment and max_misalignment > 0:
-            self._ffmpeg_t_args = ("-t", "%d" % (max_misalignment * 2))
-        else:
-            self._ffmpeg_t_args = (None, None)
+        self._max_misalignment = max_misalignment
         self._sample_rate = sample_rate
         self._known_delay_ge_map = known_delay_ge_map
         self._orig_infos = {}  # per filename
@@ -143,34 +140,11 @@ class SyncDetector(object):
         INPUT: Video file, and its index of input file list
         OUTPUT: Does not return any values, but saves audio as wav file
         """
-        _ffmpeg_ss_args = (None, None)
-        if idx in self._known_delay_ge_map:
-            ss_h = self._known_delay_ge_map[idx] // 3600
-            ss_m = self._known_delay_ge_map[idx] // 60
-            ss_s = self._known_delay_ge_map[idx] % 60
-            _ffmpeg_ss_args = (
-                "-ss",
-                "%02d:%02d:%02d.000" % (ss_h, ss_m, ss_s)
-                )
-
-        track_name = os.path.basename(video_file)
-        audio_output = track_name + "WAV.wav"  # !! CHECK TO SEE IF FILE IS IN UPLOADS DIRECTORY
-        output = os.path.join(self._working_dir, audio_output)
-        if not os.path.exists(output):
-            cmd = [
-                    "ffmpeg", "-y",
-                    _ffmpeg_ss_args[0], _ffmpeg_ss_args[1],
-                    self._ffmpeg_t_args[0], self._ffmpeg_t_args[1],
-                    "-i", "%s" % video_file,
-                    "-vn",
-                    "-ar", "%d" % self._sample_rate,
-                    "-ac", "1",
-                    "-f", "wav",
-                    "%s" % output
-                    ]
-            #_logger.debug(cmd)
-            communicate.check_call(cmd, stderr=open(os.devnull, 'w'))
-        return output
+        return communicate.media_to_mono_wave(
+            video_file, self._working_dir,
+            starttime_offset=self._known_delay_ge_map.get(idx, 0),
+            duration=self._max_misalignment * 2,
+            sample_rate=self._sample_rate)
 
     def _get_media_info(self, fn):
         if fn not in self._orig_infos:

@@ -9,6 +9,7 @@ from __future__ import absolute_import
 
 import subprocess
 import sys
+import os
 import re
 import logging
 
@@ -122,3 +123,50 @@ def get_media_info(filename):
     return {
         "duration": tp[0] * 60 * 60 + tp[1] * 60 + tp[2] + tp[3] / 100.,
         }
+
+
+def media_to_mono_wave(
+    video_file,
+    out_dir,
+    starttime_offset=0,  # -ss
+    duration=0,  # -t
+    sample_rate=48000,  # -ar
+    ):
+    """
+    Convert the given media to monoral WAV by calling `ffmpeg`.
+    """
+    _ffmpeg_ss_args = (None, None)
+    if starttime_offset > 0:
+        ss_h = starttime_offset // 3600
+        ss_m = starttime_offset // 60
+        ss_s = starttime_offset % 60
+        _ffmpeg_ss_args = (
+            "-ss",
+            "%02d:%02d:%02d.000" % (ss_h, ss_m, ss_s)
+            )
+    if duration and duration > 0:
+        ffmpeg_t_args = ("-t", "%d" % duration)
+    else:
+        ffmpeg_t_args = (None, None)
+
+    track_name = os.path.basename(video_file)
+    # !! CHECK TO SEE IF FILE IS IN UPLOADS DIRECTORY
+    audio_output = track_name + "[%d-%d-%d]WAV.wav" % (
+        starttime_offset, duration, sample_rate)
+
+    output = os.path.join(out_dir, audio_output)
+    if not os.path.exists(output):
+        cmd = [
+                "ffmpeg", "-y",
+                _ffmpeg_ss_args[0], _ffmpeg_ss_args[1],
+                ffmpeg_t_args[0], ffmpeg_t_args[1],
+                "-i", "%s" % video_file,
+                "-vn",
+                "-ar", "%d" % sample_rate,
+                "-ac", "1",
+                "-f", "wav",
+                "%s" % output
+                ]
+        #_logger.debug(cmd)
+        check_call(cmd, stderr=open(os.devnull, 'w'))
+    return output
