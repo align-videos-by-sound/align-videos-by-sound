@@ -43,7 +43,7 @@ def _filter_args(*cmd):
     do filtering None, and do encoding items to bytes
     (in Python 2).
     """
-    return map(_encode, filter(None, *cmd))
+    return list(map(_encode, filter(None, *cmd)))
 
     
 def check_call(*popenargs, **kwargs):
@@ -89,7 +89,7 @@ def check_stderroutput(*popenargs, **kwargs):
     retcode = process.poll()
     if retcode:
         raise subprocess.CalledProcessError(
-            retcode, cmd, output=stderr_output)
+            retcode, list(cmd), output=stderr_output)
     return stderr_output
 
 
