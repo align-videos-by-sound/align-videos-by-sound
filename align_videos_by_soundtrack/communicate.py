@@ -19,6 +19,7 @@ __all__ = [
     "check_call", "check_stderroutput",
     "read_audio",
     "get_media_info",
+    "media_to_mono_wave",
     ]
 
 _logger = logging.getLogger(__name__)
@@ -42,7 +43,7 @@ def _filter_args(*cmd):
     do filtering None, and do encoding items to bytes
     (in Python 2).
     """
-    return map(_encode, filter(None, *cmd))
+    return list(map(_encode, filter(None, *cmd)))
 
     
 def check_call(*popenargs, **kwargs):
@@ -88,7 +89,7 @@ def check_stderroutput(*popenargs, **kwargs):
     retcode = process.poll()
     if retcode:
         raise subprocess.CalledProcessError(
-            retcode, cmd, output=stderr_output)
+            retcode, list(cmd), output=stderr_output)
     return stderr_output
 
 

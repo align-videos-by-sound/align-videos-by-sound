@@ -7,13 +7,17 @@ try:
     from setuptools import setup
 except ImportError:
     from distutils.core import setup
-    extra = {'scripts': ["bin/alignment_info_by_sound_track"]}
+    extra = {'scripts': [
+            "bin/alignment_info_by_sound_track",
+            "bin/simple_stack_videos_by_sound_track",
+            ]}
 else:
     extra = {
         #'test_suite': 'align_videos_by_sound_track.test',
         'entry_points': {
             'console_scripts': [
                 'alignment_info_by_sound_track = align_videos_by_soundtrack.align:main',
+                'simple_stack_videos_by_sound_track = align_videos_by_soundtrack.simple_stack_videos:main',
                 ],
         },
     }
