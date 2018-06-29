@@ -18,6 +18,7 @@ else:
             'console_scripts': [
                 'alignment_info_by_sound_track = align_videos_by_soundtrack.align:main',
                 'simple_stack_videos_by_sound_track = align_videos_by_soundtrack.simple_stack_videos:main',
+                'trim_by_sound_track = align_videos_by_soundtrack.trim:main',
                 ],
         },
     }
