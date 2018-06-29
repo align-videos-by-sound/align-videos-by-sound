@@ -133,7 +133,7 @@ class SyncDetector(object):
     def __exit__(self, type, value, tb):
         shutil.rmtree(self._working_dir)
 
-    def _extract_audio(self, video_file, idx):
+    def _extract_audio(self, sample_rate, video_file, idx):
         """
         Extract audio from video file, save as wav auido file
 
@@ -144,19 +144,19 @@ class SyncDetector(object):
             video_file, self._working_dir,
             starttime_offset=self._known_delay_ge_map.get(idx, 0),
             duration=self._max_misalignment * 2,
-            sample_rate=self._sample_rate)
+            sample_rate=sample_rate)
 
     def _get_media_info(self, fn):
         if fn not in self._orig_infos:
             self._orig_infos[fn] = communicate.get_media_info(fn)
         return self._orig_infos[fn]
 
-    def align(self, files, fft_bin_size=1024, overlap=0, box_height=512, box_width=43, samples_per_box=7):
+    def _align(self, sample_rate, files, fft_bin_size=1024, overlap=0, box_height=512, box_width=43, samples_per_box=7):
         """
         Find time delays between video files
         """
         def _each(idx):
-            wavfile = self._extract_audio(files[idx], idx)
+            wavfile = self._extract_audio(sample_rate, files[idx], idx)
             raw_audio, rate = communicate.read_audio(wavfile)
             bins_dict = _make_horiz_bins(
                 raw_audio,
@@ -201,6 +201,29 @@ class SyncDetector(object):
             (pad_pre + orig_dur).max() - (pad_pre + orig_dur))
         trim_post = list(
             (orig_dur - trim_pre) - (orig_dur - trim_pre).min())
+
+        #
+        return pad_pre, trim_pre, orig_dur, pad_post, trim_post
+
+    def align(self, files, fft_bin_size=1024, overlap=0, box_height=512, box_width=43, samples_per_box=7):
+        """
+        Find time delays between video files
+        """
+        # First, try finding delays roughly by passing low sample rate.
+        pad_pre, trim_pre, orig_dur, pad_post, trim_post = self._align(
+            44100 // 12, files, fft_bin_size, overlap, box_height, box_width, samples_per_box)
+
+        # update knwown map, and max_misalignment
+        self._known_delay_ge_map = {
+            i: max(0.0, int(trim_pre[i] - 5.0))
+            for i in range(len(trim_pre))
+            }
+        self._max_misalignment = 15
+
+        # Finally, try finding delays precicely
+        pad_pre, trim_pre, orig_dur, pad_post, trim_post = self._align(
+            self._sample_rate, files, fft_bin_size, overlap, box_height, box_width, samples_per_box)
+
         #
         return [
             [
