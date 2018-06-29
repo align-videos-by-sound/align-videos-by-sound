@@ -19,6 +19,7 @@ __all__ = [
     "check_call", "check_stderroutput",
     "read_audio",
     "get_media_info",
+    "media_to_mono_wave",
     ]
 
 _logger = logging.getLogger(__name__)
