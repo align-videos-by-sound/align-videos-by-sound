@@ -167,7 +167,7 @@ class _StackVideosFilterGraphBuilder(object):
         self._builders[idx].add_body()
         self._builders[idx].add_post(post)
 
-    def build(self):
+    def build(self, audio_mode):
         result = []
         _r = []
         len_stacks = len(self._builders)
@@ -198,30 +198,33 @@ class _StackVideosFilterGraphBuilder(object):
             fvstack.ov.append("[v]")
             result.append(fvstack.to_str())
 
-        # stacks for audio (amerge)
-        nch = 2
-        weight = 1 - np.array([i // self._shape[0] for i in range(self._shape[0] * nch)])
-        ch = [
-            " + ".join([
-                    "c%d" % (i)
-                    for i in range(len(_r) * nch)
-                    if weight[i % (self._shape[0] * nch)]]),
-            " + ".join([
-                    "c%d" % (i)
-                    for i in range(len(_r) * nch)
-                    if (1 - weight)[i % (self._shape[0] * nch)]])
-            ]
-        result.append("""\
+        #
+        if audio_mode == "amerge":
+            # stacks for audio (amerge)
+            nch = 2
+            weight = 1 - np.array([i // self._shape[0] for i in range(self._shape[0] * nch)])
+            ch = [
+                " + ".join([
+                        "c%d" % (i)
+                        for i in range(len(_r) * nch)
+                        if weight[i % (self._shape[0] * nch)]]),
+                " + ".join([
+                        "c%d" % (i)
+                        for i in range(len(_r) * nch)
+                        if (1 - weight)[i % (self._shape[0] * nch)]])
+                ]
+            result.append("""\
 {}
 amerge=inputs={},
 pan=stereo|\\
     c0 < {} |\\
     c1 < {}
-[a]""".format(
-                "".join([_ri[2] for _ri in _r]),
-                len_stacks, ch[0], ch[1],))
-        #
-        return ";\n\n".join(result)
+[a]""".format("".join([_ri[2] for _ri in _r]),
+              len_stacks, ch[0], ch[1],))
+
+            return ";\n\n".join(result), ['[v]', '[a]']
+        else:  # as multi streams
+            return ";\n\n".join(result), ['[v]'] + [_ri[2] for _ri in _r]
 
 
 def _build(args):
@@ -238,9 +241,9 @@ def _build(args):
         for i, inf in enumerate(det.align(files)):
             b.set_paddings(i, inf[1]["pad"], inf[1]["pad_post"])
     #
-    filter_complex = b.build()
+    filter_complex, maps = b.build(args.audio_mode)
     #
-    return filter_complex, ['[v]', '[a]']
+    return filter_complex, maps
 
 
 def main(args=sys.argv):
@@ -256,6 +259,10 @@ def main(args=sys.argv):
         '--mode', choices=['script_bash', 'direct'], default='script_bash',
         help="""\
 Switching whether to produce bash shellscript or to call ffmpeg directly.""")
+    parser.add_argument(
+        '--audio_mode', choices=['amerge', 'multi_streams'], default='amerge',
+        help="""\
+Switching whether to merge audios or to keep each as multi streams.""")
     parser.add_argument(
         '--max_misalignment', type=float, default=2*60,
         help="""\
