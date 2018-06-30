@@ -237,11 +237,13 @@ pan=stereo|\\
 
 def _build(args):
     shape = json.loads(args.shape) if args.shape else (2, 2)
-    if len(args.files) != shape[0] * shape[1]:
-        parser.print_usage()
-        sys.exit(1)
-
     files = list(map(os.path.abspath, args.files))
+    if len(files) < shape[0] * shape[1]:
+        files = files + [files[i % len(files)]
+                         for i in range(shape[0] * shape[1] - len(files))]
+    else:
+        files = files[:shape[0] * shape[1]]
+    #
     b = _StackVideosFilterGraphBuilder(
         shape=shape, w=args.w, h=args.h, sample_rate=args.sample_rate)
     with SyncDetector(
@@ -262,7 +264,7 @@ def _build(args):
     #
     filter_complex = ";\n\n".join(filters)
     #
-    return filter_complex, vm1 + am
+    return files, filter_complex, vm1 + am
 
 
 def main(args=sys.argv):
@@ -302,7 +304,7 @@ See the help of alignment_info_by_sound_track.""")
         "-color_primaries", "bt709", "-color_trc", "bt709", "-colorspace", "bt709"
         ]
     args = parser.parse_args(args[1:])
-    fc, maps = _build(args)
+    files, fc, maps = _build(args)
     if args.mode == "script_bash":
         print("""\
 #! /bin/sh
@@ -314,14 +316,14 @@ ffmpeg -y \\
 " {} \\
   {} \\
   "{}"
-""".format(" ".join(['-i "{}"'.format(f) for f in args.files]),
+""".format(" ".join(['-i "{}"'.format(f) for f in files]),
            fc,
            " ".join(["-map '%s'" % m for m in maps]),
            " ".join(extra_ffargs),
            args.outfile))
     else:
         cmd = ["ffmpeg", "-y"]
-        for fn in args.files:
+        for fn in files:
             cmd.extend(["-i", fn])
         cmd.extend(["-filter_complex", fc])
         for m in maps:
