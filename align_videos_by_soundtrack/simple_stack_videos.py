@@ -257,7 +257,7 @@ def main(args=sys.argv):
         help="""\
 Switching whether to produce bash shellscript or to call ffmpeg directly.""")
     parser.add_argument(
-        '--max_misalignment', type=int, default=2*60,
+        '--max_misalignment', type=float, default=2*60,
         help="""\
 See the help of alignment_info_by_sound_track.""")
     parser.add_argument(
