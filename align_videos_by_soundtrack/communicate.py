@@ -20,6 +20,7 @@ __all__ = [
     "read_audio",
     "get_media_info",
     "media_to_mono_wave",
+    "duration_to_hhmmss",
     ]
 
 _logger = logging.getLogger(__name__)
@@ -43,7 +44,7 @@ def _filter_args(*cmd):
     do filtering None, and do encoding items to bytes
     (in Python 2).
     """
-    return map(_encode, filter(None, *cmd))
+    return list(map(_encode, filter(None, *cmd)))
 
     
 def check_call(*popenargs, **kwargs):
@@ -89,7 +90,7 @@ def check_stderroutput(*popenargs, **kwargs):
     retcode = process.poll()
     if retcode:
         raise subprocess.CalledProcessError(
-            retcode, cmd, output=stderr_output)
+            retcode, list(cmd), output=stderr_output)
     return stderr_output
 
 
@@ -126,6 +127,14 @@ def get_media_info(filename):
         }
 
 
+def duration_to_hhmmss(duration):
+    ss_h = duration // 3600
+    ss_m = duration // 60
+    ss_s = duration % 60
+    return "%02d:%02d:%02d.%s" % (
+        ss_h, ss_m, ss_s, ("%.3f" % duration).split(".")[1])
+
+
 def media_to_mono_wave(
     video_file,
     out_dir,
@@ -137,18 +146,12 @@ def media_to_mono_wave(
     Convert the given media to monoral WAV by calling `ffmpeg`.
     """
     _ffmpeg_ss_args = (None, None)
+    ffmpeg_t_args = (None, None)
     if starttime_offset > 0:
-        ss_h = starttime_offset // 3600
-        ss_m = starttime_offset // 60
-        ss_s = starttime_offset % 60
         _ffmpeg_ss_args = (
-            "-ss",
-            "%02d:%02d:%02d.000" % (ss_h, ss_m, ss_s)
-            )
+            "-ss", duration_to_hhmmss(starttime_offset))
     if duration and duration > 0:
         ffmpeg_t_args = ("-t", "%d" % duration)
-    else:
-        ffmpeg_t_args = (None, None)
 
     track_name = os.path.basename(video_file)
     # !! CHECK TO SEE IF FILE IS IN UPLOADS DIRECTORY
