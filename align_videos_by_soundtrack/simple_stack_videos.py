@@ -188,7 +188,9 @@ class _StackVideosFilterGraphBuilder(object):
             for i in range(self._shape[1]):
                 fhstack = _Filter()
                 fhstack.iv.extend(ivmaps[i * self._shape[0]:(i + 1) * self._shape[0]])
-                fhstack.descs.append("hstack=inputs={}".format(len(ivmaps[i * self._shape[0]:(i + 1) * self._shape[0]])))
+                fhstack.descs.append(
+                    "hstack=inputs={}:shortest=1".format(
+                        len(ivmaps[i * self._shape[0]:(i + 1) * self._shape[0]])))
                 olab = "[{}v]".format("%d" % (i + 1) if self._shape[1] > 1 else "")
                 fhstack.ov.append(olab)
                 result.append(fhstack.to_str())
@@ -199,7 +201,9 @@ class _StackVideosFilterGraphBuilder(object):
 
         if self._shape[1] > 1:
             # vstack
-            fvstack.descs.append("vstack=inputs={}".format(self._shape[1]))
+            fvstack.descs.append(
+                "vstack=inputs={}:shortest=1".format(
+                    self._shape[1]))
             fvstack.ov.append("[v]")
             result.append(fvstack.to_str())
 
@@ -211,7 +215,8 @@ class _StackVideosFilterGraphBuilder(object):
 
         # stacks for audio (amerge)
         nch = 2
-        weight = 1 - np.array([i // self._shape[0] for i in range(self._shape[0] * nch)])
+        weight = 1 - np.array(
+            [i // self._shape[0] for i in range(self._shape[0] * nch)])
         ch = [
             " + ".join([
                     "c%d" % (i)
@@ -249,7 +254,22 @@ def _build(args):
     with SyncDetector(
         max_misalignment=args.max_misalignment) as det:
         for i, inf in enumerate(det.align(files)):
-            b.set_paddings(i, inf[1]["pad"], inf[1]["pad_post"])
+            pre, post = inf[1]["pad"], inf[1]["pad_post"]
+            if not (pre > 0 and post > 0):
+                # FIXME:
+                #  In this case, if we don't add paddings, we'll encount the following:
+                #    [AVFilterGraph @ 0000000003146500] The following filters could not
+                #choose their formats: Parsed_amerge_48
+                #    Consider inserting the (a)format filter near their input or output.
+                #    Error reinitializing filters!
+                #    Failed to inject frame into filter network: I/O error
+                #    Error while processing the decoded data for stream #3:0
+                #    Conversion failed!
+                #
+                #  Just by adding padding just like any other stream, it seems we can
+                #  avoid it, so let's add meaningless padding as a workaround.
+                post = post + 1.0
+            b.set_paddings(i, pre, post)
     #
     filters = []
     r0, vm0, am0 = b.build_each_streams()
