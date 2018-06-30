@@ -167,7 +167,7 @@ class _StackVideosFilterGraphBuilder(object):
         self._builders[idx].add_body()
         self._builders[idx].add_post(post)
 
-    def build(self, audio_mode):
+    def build_each_streams(self):
         result = []
         _r = []
         len_stacks = len(self._builders)
@@ -175,22 +175,27 @@ class _StackVideosFilterGraphBuilder(object):
             _r.append(self._builders[i].build())
             result.append(_r[i][0])
 
+        # filters string array, video maps, audio maps
+        return result, [_ri[1] for _ri in _r], [_ri[2] for _ri in _r]
+
+    def build(self, audio_mode):
+        result, ivmaps, iamaps = self.build_each_streams()
+
+        ovmaps = ['[v]']
         # stacks for video
         fvstack = _Filter()
         if self._shape[0] > 1:
             for i in range(self._shape[1]):
                 fhstack = _Filter()
-                fhstack.iv.extend([
-                        _ri[1]
-                        for _ri in _r[i * self._shape[0]:(i + 1) * self._shape[0]]])
-                fhstack.descs.append("hstack=inputs={}".format(len(_r[i * self._shape[0]:(i + 1) * self._shape[0]])))
+                fhstack.iv.extend(ivmaps[i * self._shape[0]:(i + 1) * self._shape[0]])
+                fhstack.descs.append("hstack=inputs={}".format(len(ivmaps[i * self._shape[0]:(i + 1) * self._shape[0]])))
                 olab = "[{}v]".format("%d" % (i + 1) if self._shape[1] > 1 else "")
                 fhstack.ov.append(olab)
                 result.append(fhstack.to_str())
 
                 fvstack.iv.append(olab)
         else:
-            fvstack.iv.extend([_ri[1] for _ri in _r])
+            fvstack.iv.extend(ivmaps)
 
         if self._shape[1] > 1:
             # vstack
@@ -199,6 +204,7 @@ class _StackVideosFilterGraphBuilder(object):
             result.append(fvstack.to_str())
 
         #
+        oamaps = []
         if audio_mode == "amerge":
             # stacks for audio (amerge)
             nch = 2
@@ -206,11 +212,11 @@ class _StackVideosFilterGraphBuilder(object):
             ch = [
                 " + ".join([
                         "c%d" % (i)
-                        for i in range(len(_r) * nch)
+                        for i in range(len(iamaps) * nch)
                         if weight[i % (self._shape[0] * nch)]]),
                 " + ".join([
                         "c%d" % (i)
-                        for i in range(len(_r) * nch)
+                        for i in range(len(iamaps) * nch)
                         if (1 - weight)[i % (self._shape[0] * nch)]])
                 ]
             result.append("""\
@@ -219,12 +225,15 @@ amerge=inputs={},
 pan=stereo|\\
     c0 < {} |\\
     c1 < {}
-[a]""".format("".join([_ri[2] for _ri in _r]),
-              len_stacks, ch[0], ch[1],))
+[a]""".format("".join(iamaps),
+              len(self._builders), ch[0], ch[1],))
 
-            return ";\n\n".join(result), ['[v]', '[a]']
+            oamaps.append('[a]')
         else:  # as multi streams
-            return ";\n\n".join(result), ['[v]'] + [_ri[2] for _ri in _r]
+            oamaps.extend(iamaps)
+
+        #
+        return result, ovmaps, oamaps
 
 
 def _build(args):
@@ -241,9 +250,10 @@ def _build(args):
         for i, inf in enumerate(det.align(files)):
             b.set_paddings(i, inf[1]["pad"], inf[1]["pad_post"])
     #
-    filter_complex, maps = b.build(args.audio_mode)
+    filters, ovmaps, oamaps = b.build(args.audio_mode)
+    filter_complex = ";\n\n".join(filters)
     #
-    return filter_complex, maps
+    return filter_complex, ovmaps + oamaps
 
 
 def main(args=sys.argv):
