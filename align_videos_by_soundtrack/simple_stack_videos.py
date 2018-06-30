@@ -254,8 +254,11 @@ def _build(args):
     filters = []
     r0, vm0, am0 = b.build_each_streams()
     filters.extend(r0)
-    r1, vm1 = b.build_stack_videos(vm0)
-    filters.extend(r1)
+    if args.video_mode == "stack":
+        r1, vm1 = b.build_stack_videos(vm0)
+        filters.extend(r1)
+    else:
+        vm1 = vm0
     if args.audio_mode == "amerge":
         r2, am = b.build_amerge_audio(am0)
         filters.extend(r2)
@@ -284,6 +287,10 @@ Switching whether to produce bash shellscript or to call ffmpeg directly.""")
         '--audio_mode', choices=['amerge', 'multi_streams'], default='amerge',
         help="""\
 Switching whether to merge audios or to keep each as multi streams.""")
+    parser.add_argument(
+        '--video_mode', choices=['stack', 'multi_streams'], default='stack',
+        help="""\
+Switching whether to stack videos or to keep each as multi streams.""")
     parser.add_argument(
         '--max_misalignment', type=float, default=2*60,
         help="""\
