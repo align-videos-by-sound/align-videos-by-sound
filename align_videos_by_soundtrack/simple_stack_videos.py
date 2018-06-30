@@ -178,8 +178,8 @@ class _StackVideosFilterGraphBuilder(object):
         # filters string array, video maps, audio maps
         return result, [_ri[1] for _ri in _r], [_ri[2] for _ri in _r]
 
-    def build(self, audio_mode):
-        result, ivmaps, iamaps = self.build_each_streams()
+    def build_stack_videos(self, ivmaps):
+        result = []
 
         ovmaps = ['[v]']
         # stacks for video
@@ -203,23 +203,26 @@ class _StackVideosFilterGraphBuilder(object):
             fvstack.ov.append("[v]")
             result.append(fvstack.to_str())
 
+        return result, ovmaps
+
+    def build_amerge_audio(self, iamaps):
         #
-        oamaps = []
-        if audio_mode == "amerge":
-            # stacks for audio (amerge)
-            nch = 2
-            weight = 1 - np.array([i // self._shape[0] for i in range(self._shape[0] * nch)])
-            ch = [
-                " + ".join([
-                        "c%d" % (i)
-                        for i in range(len(iamaps) * nch)
-                        if weight[i % (self._shape[0] * nch)]]),
-                " + ".join([
-                        "c%d" % (i)
-                        for i in range(len(iamaps) * nch)
-                        if (1 - weight)[i % (self._shape[0] * nch)]])
-                ]
-            result.append("""\
+        result = []
+
+        # stacks for audio (amerge)
+        nch = 2
+        weight = 1 - np.array([i // self._shape[0] for i in range(self._shape[0] * nch)])
+        ch = [
+            " + ".join([
+                    "c%d" % (i)
+                    for i in range(len(iamaps) * nch)
+                    if weight[i % (self._shape[0] * nch)]]),
+            " + ".join([
+                    "c%d" % (i)
+                    for i in range(len(iamaps) * nch)
+                    if (1 - weight)[i % (self._shape[0] * nch)]])
+            ]
+        result.append("""\
 {}
 amerge=inputs={},
 pan=stereo|\\
@@ -228,12 +231,8 @@ pan=stereo|\\
 [a]""".format("".join(iamaps),
               len(self._builders), ch[0], ch[1],))
 
-            oamaps.append('[a]')
-        else:  # as multi streams
-            oamaps.extend(iamaps)
-
         #
-        return result, ovmaps, oamaps
+        return result, ['[a]']
 
 
 def _build(args):
@@ -250,10 +249,20 @@ def _build(args):
         for i, inf in enumerate(det.align(files)):
             b.set_paddings(i, inf[1]["pad"], inf[1]["pad_post"])
     #
-    filters, ovmaps, oamaps = b.build(args.audio_mode)
+    filters = []
+    r0, vm0, am0 = b.build_each_streams()
+    filters.extend(r0)
+    r1, vm1 = b.build_stack_videos(vm0)
+    filters.extend(r1)
+    if args.audio_mode == "amerge":
+        r2, am = b.build_amerge_audio(am0)
+        filters.extend(r2)
+    else:
+        am = am0
+    #
     filter_complex = ";\n\n".join(filters)
     #
-    return filter_complex, ovmaps + oamaps
+    return filter_complex, vm1 + am
 
 
 def main(args=sys.argv):
