@@ -101,7 +101,14 @@ def _find_bin_max(boxes, maxes_per_box):
 
 
 def _find_freq_pairs(freqs_dict_orig, freqs_dict_sample):
-    for key in set(freqs_dict_sample.keys()) & set(freqs_dict_orig.keys()):
+    keys = set(freqs_dict_sample.keys()) & set(freqs_dict_orig.keys())
+    #
+    if not keys:
+        raise Exception(
+            """I could not find a match. Consider giving a large value to \
+"max_misalignment" if the target medias are sure to shoot the same event.""")
+    #
+    for key in keys:
         for iitem in freqs_dict_sample[key]:  # determine time offset
             for jitem in freqs_dict_orig[key]:
                 yield (iitem, jitem)
