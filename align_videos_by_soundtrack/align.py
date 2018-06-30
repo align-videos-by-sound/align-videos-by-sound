@@ -251,7 +251,7 @@ def main(args=sys.argv):
     parser = argparse.ArgumentParser(prog=args[0], usage=_doc_template)
     parser.add_argument(
         '--max_misalignment',
-        type=int, default=2*60,
+        type=float, default=2*60,
         help='When handling media files with long playback time, \
 it may take a huge amount of time and huge memory. \
 In such a case, by changing this value to a small value, \

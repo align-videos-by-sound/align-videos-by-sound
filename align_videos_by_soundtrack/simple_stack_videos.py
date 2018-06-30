@@ -167,7 +167,7 @@ class _StackVideosFilterGraphBuilder(object):
         self._builders[idx].add_body()
         self._builders[idx].add_post(post)
 
-    def build(self):
+    def build_each_streams(self):
         result = []
         _r = []
         len_stacks = len(self._builders)
@@ -175,40 +175,56 @@ class _StackVideosFilterGraphBuilder(object):
             _r.append(self._builders[i].build())
             result.append(_r[i][0])
 
+        # filters string array, video maps, audio maps
+        return result, [_ri[1] for _ri in _r], [_ri[2] for _ri in _r]
+
+    def build_stack_videos(self, ivmaps):
+        result = []
+
+        ovmaps = ['[v]']
         # stacks for video
         fvstack = _Filter()
         if self._shape[0] > 1:
             for i in range(self._shape[1]):
                 fhstack = _Filter()
-                fhstack.iv.extend([
-                        _ri[1]
-                        for _ri in _r[i * self._shape[0]:(i + 1) * self._shape[0]]])
-                fhstack.descs.append("hstack=inputs={}".format(len(_r[i * self._shape[0]:(i + 1) * self._shape[0]])))
+                fhstack.iv.extend(ivmaps[i * self._shape[0]:(i + 1) * self._shape[0]])
+                fhstack.descs.append(
+                    "hstack=inputs={}:shortest=1".format(
+                        len(ivmaps[i * self._shape[0]:(i + 1) * self._shape[0]])))
                 olab = "[{}v]".format("%d" % (i + 1) if self._shape[1] > 1 else "")
                 fhstack.ov.append(olab)
                 result.append(fhstack.to_str())
 
                 fvstack.iv.append(olab)
         else:
-            fvstack.iv.extend([_ri[1] for _ri in _r])
+            fvstack.iv.extend(ivmaps)
 
         if self._shape[1] > 1:
             # vstack
-            fvstack.descs.append("vstack=inputs={}".format(self._shape[1]))
+            fvstack.descs.append(
+                "vstack=inputs={}:shortest=1".format(
+                    self._shape[1]))
             fvstack.ov.append("[v]")
             result.append(fvstack.to_str())
 
+        return result, ovmaps
+
+    def build_amerge_audio(self, iamaps):
+        #
+        result = []
+
         # stacks for audio (amerge)
         nch = 2
-        weight = 1 - np.array([i // self._shape[0] for i in range(self._shape[0] * nch)])
+        weight = 1 - np.array(
+            [i // self._shape[0] for i in range(self._shape[0] * nch)])
         ch = [
             " + ".join([
                     "c%d" % (i)
-                    for i in range(len(_r) * nch)
+                    for i in range(len(iamaps) * nch)
                     if weight[i % (self._shape[0] * nch)]]),
             " + ".join([
                     "c%d" % (i)
-                    for i in range(len(_r) * nch)
+                    for i in range(len(iamaps) * nch)
                     if (1 - weight)[i % (self._shape[0] * nch)]])
             ]
         result.append("""\
@@ -217,30 +233,61 @@ amerge=inputs={},
 pan=stereo|\\
     c0 < {} |\\
     c1 < {}
-[a]""".format(
-                "".join([_ri[2] for _ri in _r]),
-                len_stacks, ch[0], ch[1],))
+[a]""".format("".join(iamaps),
+              len(self._builders), ch[0], ch[1],))
+
         #
-        return ";\n\n".join(result)
+        return result, ['[a]']
 
 
 def _build(args):
     shape = json.loads(args.shape) if args.shape else (2, 2)
-    if len(args.files) != shape[0] * shape[1]:
-        parser.print_usage()
-        sys.exit(1)
-
     files = list(map(os.path.abspath, args.files))
+    if len(files) < shape[0] * shape[1]:
+        files = files + [files[i % len(files)]
+                         for i in range(shape[0] * shape[1] - len(files))]
+    else:
+        files = files[:shape[0] * shape[1]]
+    #
     b = _StackVideosFilterGraphBuilder(
         shape=shape, w=args.w, h=args.h, sample_rate=args.sample_rate)
     with SyncDetector(
         max_misalignment=args.max_misalignment) as det:
         for i, inf in enumerate(det.align(files)):
-            b.set_paddings(i, inf[1]["pad"], inf[1]["pad_post"])
+            pre, post = inf[1]["pad"], inf[1]["pad_post"]
+            if not (pre > 0 and post > 0):
+                # FIXME:
+                #  In this case, if we don't add paddings, we'll encount the following:
+                #    [AVFilterGraph @ 0000000003146500] The following filters could not
+                #choose their formats: Parsed_amerge_48
+                #    Consider inserting the (a)format filter near their input or output.
+                #    Error reinitializing filters!
+                #    Failed to inject frame into filter network: I/O error
+                #    Error while processing the decoded data for stream #3:0
+                #    Conversion failed!
+                #
+                #  Just by adding padding just like any other stream, it seems we can
+                #  avoid it, so let's add meaningless padding as a workaround.
+                post = post + 1.0
+            b.set_paddings(i, pre, post)
     #
-    filter_complex = b.build()
+    filters = []
+    r0, vm0, am0 = b.build_each_streams()
+    filters.extend(r0)
+    if args.video_mode == "stack":
+        r1, vm1 = b.build_stack_videos(vm0)
+        filters.extend(r1)
+    else:
+        vm1 = vm0
+    if args.audio_mode == "amerge":
+        r2, am = b.build_amerge_audio(am0)
+        filters.extend(r2)
+    else:
+        am = am0
     #
-    return filter_complex, ['[v]', '[a]']
+    filter_complex = ";\n\n".join(filters)
+    #
+    return files, filter_complex, vm1 + am
 
 
 def main(args=sys.argv):
@@ -257,7 +304,15 @@ def main(args=sys.argv):
         help="""\
 Switching whether to produce bash shellscript or to call ffmpeg directly.""")
     parser.add_argument(
-        '--max_misalignment', type=int, default=2*60,
+        '--audio_mode', choices=['amerge', 'multi_streams'], default='amerge',
+        help="""\
+Switching whether to merge audios or to keep each as multi streams.""")
+    parser.add_argument(
+        '--video_mode', choices=['stack', 'multi_streams'], default='stack',
+        help="""\
+Switching whether to stack videos or to keep each as multi streams.""")
+    parser.add_argument(
+        '--max_misalignment', type=float, default=2*60,
         help="""\
 See the help of alignment_info_by_sound_track.""")
     parser.add_argument(
@@ -276,7 +331,7 @@ See the help of alignment_info_by_sound_track.""")
         "-color_primaries", "bt709", "-color_trc", "bt709", "-colorspace", "bt709"
         ]
     args = parser.parse_args(args[1:])
-    fc, maps = _build(args)
+    files, fc, maps = _build(args)
     if args.mode == "script_bash":
         print("""\
 #! /bin/sh
@@ -288,14 +343,14 @@ ffmpeg -y \\
 " {} \\
   {} \\
   "{}"
-""".format(" ".join(['-i "{}"'.format(f) for f in args.files]),
+""".format(" ".join(['-i "{}"'.format(f) for f in files]),
            fc,
            " ".join(["-map '%s'" % m for m in maps]),
            " ".join(extra_ffargs),
            args.outfile))
     else:
         cmd = ["ffmpeg", "-y"]
-        for fn in args.files:
+        for fn in files:
             cmd.extend(["-i", fn])
         cmd.extend(["-filter_complex", fc])
         for m in maps:
