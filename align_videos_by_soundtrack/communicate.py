@@ -115,6 +115,11 @@ def get_media_info(filename):
 
     for now, this function extracts only its duration.
     """
+    # If processing is progressed when there is no input file, exception
+    # reporting is considerably troublesome. Therefore, we decide to check
+    # existence in getatime to understand easily.
+    os.path.getatime(filename)
+
     err = check_stderroutput(["ffprobe", filename])
     rgx = r"Duration: (\d{2}):(\d{2}):(\d{2}).(\d{2})"
     tp = list(
@@ -145,6 +150,11 @@ def media_to_mono_wave(
     """
     Convert the given media to monoral WAV by calling `ffmpeg`.
     """
+    # If processing is progressed when there is no input file, exception
+    # reporting is considerably troublesome. Therefore, we decide to check
+    # existence in getatime to understand easily.
+    os.path.getatime(video_file)
+
     _ffmpeg_ss_args = (None, None)
     ffmpeg_t_args = (None, None)
     if starttime_offset > 0:
