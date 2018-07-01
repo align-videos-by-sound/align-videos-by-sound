@@ -98,14 +98,14 @@ sine=frequency=0:sample_rate={sample_rate}:d={{duration:.3f}}".format(
         # filter to original video stream
         fbodyv = _Filter()
         fbodyv.iv.append("[%d:v]" % idx)
-        fbodyv.descs.append("scale=%d:%d,setsar=1" % (w, h))
+        fbodyv.descs.append("{v_filter_extra}scale=%d:%d,setsar=1" % (w, h))
         fbodyv.ov.append("[v%d]" % idx)
         self._bodyv = (fbodyv.to_str(), "".join(fbodyv.ov))
 
         # filter to original audio stream
         fbodya = _Filter()
         fbodya.ia.append("[%d:a]" % idx)
-        fbodya.descs.append("aresample={sample_rate}".format(
+        fbodya.descs.append("{{a_filter_extra}}aresample={sample_rate}".format(
                 sample_rate=sample_rate))
         fbodya.oa.append("[a%d]" % idx)
         self._bodya = (fbodya.to_str(), "".join(fbodya.oa))
@@ -129,10 +129,14 @@ sine=frequency=0:sample_rate={sample_rate}:d={{duration:.3f}}".format(
         self._add_prepost(duration, "pre")
         return self
 
-    def add_body(self):
-        self._result.append(self._bodyv[0])
+    def add_body(self, v_filter_extra, a_filter_extra):
+        self._result.append(
+            self._bodyv[0].format(
+                v_filter_extra=v_filter_extra + "," if v_filter_extra else ""))
         self._fconcat.iv.append(self._bodyv[1])
-        self._result.append(self._bodya[0])
+        self._result.append(
+            self._bodya[0].format(
+                a_filter_extra=a_filter_extra + "," if a_filter_extra else ""))
         self._fconcat.ia.append(self._bodya[1])
 
         return self
@@ -166,9 +170,10 @@ class _StackVideosFilterGraphBuilder(object):
             self._builders.append(
                 _StreamWithPadBuilder(i, w, h, sample_rate))
 
-    def set_paddings(self, idx, pre, post):
+    def set_paddings(self, idx, pre, post, v_filter_extra, a_filter_extra):
         self._builders[idx].add_pre(pre)
-        self._builders[idx].add_body()
+        self._builders[idx].add_body(
+            v_filter_extra, a_filter_extra)
         self._builders[idx].add_post(post)
 
     def build_each_streams(self):
@@ -253,6 +258,9 @@ def _build(args):
     else:
         files = files[:shape[0] * shape[1]]
     #
+    a_filter_extra = json.loads(args.a_filter_extra) if args.a_filter_extra else {}
+    v_filter_extra = json.loads(args.v_filter_extra) if args.v_filter_extra else {}
+    #
     b = _StackVideosFilterGraphBuilder(
         shape=shape, w=args.w, h=args.h, sample_rate=args.sample_rate)
     with SyncDetector(
@@ -273,7 +281,11 @@ def _build(args):
                 #  Just by adding padding just like any other stream, it seems we can
                 #  avoid it, so let's add meaningless padding as a workaround.
                 post = post + 1.0
-            b.set_paddings(i, pre, post)
+
+            vf = ",".join(filter(None, [v_filter_extra.get(""), v_filter_extra.get("%d" % i)]))
+            af = ",".join(filter(None, [a_filter_extra.get(""), a_filter_extra.get("%d" % i)]))
+            b.set_paddings(i, pre, post, vf, af)
+
     #
     filters = []
     r0, vm0, am0 = b.build_each_streams()
@@ -307,14 +319,33 @@ def main(args=sys.argv):
         '--mode', choices=['script_bash', 'direct'], default='script_bash',
         help="""\
 Switching whether to produce bash shellscript or to call ffmpeg directly.""")
+    #####
     parser.add_argument(
         '--audio_mode', choices=['amerge', 'multi_streams'], default='amerge',
         help="""\
 Switching whether to merge audios or to keep each as multi streams.""")
+    #
+    parser.add_argument(
+        '--a_filter_extra', type=str,
+        help="""\
+Filter to add to the audio input stream. Pass in JSON format, in dictionary format \
+(stream by key, filter by value). For example, '{"1": "volume = 0.5", "2": "loudnorm"}' etc. \
+If the key is blank, it means all input streams. Only single input / single output \
+filters can be used.""")
+    ###
     parser.add_argument(
         '--video_mode', choices=['stack', 'multi_streams'], default='stack',
         help="""\
 Switching whether to stack videos or to keep each as multi streams.""")
+    #
+    parser.add_argument(
+        '--v_filter_extra', type=str,
+        help="""\
+Filter to add to the video input stream. Pass in JSON format, in dictionary format \
+(stream by key, filter by value). For example, '{"1": "boxblur=luma_radius=2:luma_power=1"}' etc. \
+If the key is blank, it means all input streams. Only single input / single output \
+filters can be used.""")
+    #####
     parser.add_argument(
         '--max_misalignment', type=float, default=2*60,
         help="""\
