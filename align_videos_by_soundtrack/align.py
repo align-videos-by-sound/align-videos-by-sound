@@ -249,7 +249,8 @@ def main(args=sys.argv):
         help='When handling media files with long playback time, \
 it may take a huge amount of time and huge memory. \
 In such a case, by changing this value to a small value, \
-it is possible to indicate the scanning range of the media file to the program.')
+it is possible to indicate the scanning range of the media file to the program. \
+(default: %(default)d)')
     parser.add_argument(
         '--known_delay_ge_map',
         type=str,
@@ -270,14 +271,14 @@ itself, the result will be more precise. However, this wastes a lot of memory, s
 can reduce memory consumption by downsampling (instead losing accuracy a bit). \
 The default value uses quite a lot of memory, but if it changes to a value of, for example, \
 44100, 22050, etc., although a large error of about several tens of milliseconds \
-increases, the processing time is greatly shortened.''')
+increases, the processing time is greatly shortened. (default: %(default)d)''')
     parser.add_argument(
         '--json',
         action="store_true",
         help='To report in json format.',)
     parser.add_argument(
         'file_names',
-        nargs="*",
+        nargs="+",
         help='Media files including audio streams. \
 It is possible to pass any media that ffmpeg can handle.',)
     args = parser.parse_args(args[1:])

@@ -311,19 +311,20 @@ def main(args=sys.argv):
 
     parser = argparse.ArgumentParser()
     parser.add_argument(
-        "files", nargs="*",
+        "files", nargs="+",
         help="The media files which contains both video and audio.")
     parser.add_argument(
-        "-o", "--outfile", dest="outfile", default="merged.mp4")
+        "-o", "--outfile", dest="outfile", default="merged.mp4",
+        help="Specifying the output file. (default: %(default)s)")
     parser.add_argument(
         '--mode', choices=['script_bash', 'direct'], default='script_bash',
         help="""\
-Switching whether to produce bash shellscript or to call ffmpeg directly.""")
+Switching whether to produce bash shellscript or to call ffmpeg directly. (default: %(default)s)""")
     #####
     parser.add_argument(
         '--audio_mode', choices=['amerge', 'multi_streams'], default='amerge',
         help="""\
-Switching whether to merge audios or to keep each as multi streams.""")
+Switching whether to merge audios or to keep each as multi streams. (default: %(default)s)""")
     #
     parser.add_argument(
         '--a_filter_extra', type=str,
@@ -336,7 +337,7 @@ filters can be used.""")
     parser.add_argument(
         '--video_mode', choices=['stack', 'multi_streams'], default='stack',
         help="""\
-Switching whether to stack videos or to keep each as multi streams.""")
+Switching whether to stack videos or to keep each as multi streams. (default: %(default)s)""")
     #
     parser.add_argument(
         '--v_filter_extra', type=str,
@@ -349,19 +350,19 @@ filters can be used.""")
     parser.add_argument(
         '--max_misalignment', type=float, default=2*60,
         help="""\
-See the help of alignment_info_by_sound_track.""")
+See the help of alignment_info_by_sound_track. (default: %(default)d)""")
     parser.add_argument(
         '--shape', type=str, default="[2, 2]",
-        help="The shape of the tile, like '[2, 2]'")
+        help="The shape of the tile, like '[2, 2]'. (default: %(default)s)")
     parser.add_argument(
         '--sample_rate', type=int, default=44100,
-        help="Sampling rate of the output file.")
+        help="Sampling rate of the output file. (default: %(default)d)")
     parser.add_argument(
         '--width-per-cell', dest="w", type=int, default=960,
-        help="Width of the cell.")
+        help="Width of the cell. (default: %(default)d)")
     parser.add_argument(
         '--height-per-cell', dest="h", type=int, default=540,
-        help="Height of the cell.")
+        help="Height of the cell. (default: %(default)d)")
     extra_ffargs = [
         "-color_primaries", "bt709", "-color_trc", "bt709", "-colorspace", "bt709"
         ]
