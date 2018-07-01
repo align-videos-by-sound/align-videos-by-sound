@@ -60,24 +60,12 @@ def _make_horiz_bins(data, fft_bin_size, overlap, box_height):
     for x, j in enumerate(range(int(-overlap), len(data), int(fft_bin_size - overlap))):
         sample_data = data[max(0, j):max(0, j) + fft_bin_size]
         if (len(sample_data) == fft_bin_size):  # if there are enough audio points left to create a full fft bin
-            intensities = _fourier(sample_data)  # intensities is list of fft results
-            for i in range(len(intensities)):
+            intensities = np.abs(np.fft.fft(sample_data))  # intensities is list of fft results
+            for i in range(len(intensities) // 2):
                 box_y = i // box_height
                 horiz_bins[box_y].append((intensities[i], x, i))  # (intensity, x, y)
 
     return horiz_bins
-
-
-def _fourier(sample):  # , overlap):
-    """
-    Compute the one-dimensional discrete Fourier Transform
-
-    INPUT: list with length of number of samples per second
-    OUTPUT: list of real values len of num samples per second
-    """
-    fft_data = np.fft.fft(sample)  # Returns real and complex value pairs
-    fft_data = fft_data[:len(fft_data) // 2]
-    return list(np.sqrt(fft_data.real**2 + fft_data.imag**2))
 
 
 def _make_vert_bins(horiz_bins, box_width):
