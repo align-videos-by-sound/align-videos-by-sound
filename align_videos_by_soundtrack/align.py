@@ -92,7 +92,7 @@ def _find_bin_max(boxes, maxes_per_box):
     return freqs_dict
 
 
-def _find_freq_pairs(freqs_dict_orig, freqs_dict_sample):
+def _find_delay(freqs_dict_orig, freqs_dict_sample):
     keys = set(freqs_dict_sample.keys()) & set(freqs_dict_orig.keys())
     #
     if not keys:
@@ -100,17 +100,13 @@ def _find_freq_pairs(freqs_dict_orig, freqs_dict_sample):
             """I could not find a match. Consider giving a large value to \
 "max_misalignment" if the target medias are sure to shoot the same event.""")
     #
-    for key in keys:
-        for iitem in freqs_dict_sample[key]:  # determine time offset
-            for jitem in freqs_dict_orig[key]:
-                yield (iitem, jitem)
-
-
-def _find_delay(time_pairs):
     t_diffs = defaultdict(int)
-    for pair in time_pairs:
-        delta_t = pair[0] - pair[1]
-        t_diffs[delta_t] += 1
+    for key in keys:
+        for x_i in freqs_dict_sample[key]:  # determine time offset
+            for x_j in freqs_dict_orig[key]:
+                delta_t = x_i - x_j
+                t_diffs[delta_t] += 1
+
     t_diffs_sorted = sorted(list(t_diffs.items()), key=lambda x: x[1])
     # _logger.debug(t_diffs_sorted)
     time_delay = t_diffs_sorted[-1][0]
@@ -175,8 +171,7 @@ class SyncDetector(object):
             rate, ft_dict2 = _each(i + 1)
 
             # Determie time delay
-            pairs = _find_freq_pairs(ft_dict1, ft_dict2)
-            delay = _find_delay(pairs)
+            delay = _find_delay(ft_dict1, ft_dict2)
             samples_per_sec = float(rate) / float(fft_bin_size)
             seconds = float(delay) / float(samples_per_sec)
 
