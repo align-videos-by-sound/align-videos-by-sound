@@ -61,29 +61,33 @@ def _make_horiz_bins(data, fft_bin_size, overlap, box_height):
         sample_data = data[max(0, j):max(0, j) + fft_bin_size]
         if (len(sample_data) == fft_bin_size):  # if there are enough audio points left to create a full fft bin
             intensities = np.abs(np.fft.fft(sample_data))  # intensities is list of fft results
-            for i in range(len(intensities) // 2):
-                box_y = i // box_height
-                horiz_bins[box_y].append((intensities[i], x, i))  # (intensity, x, y)
+            for y in range(len(intensities) // 2):
+                box_y = y // box_height
+                # x: corresponding to time
+                # y: corresponding to freq
+                horiz_bins[box_y].append((intensities[y], x, y))
 
     return horiz_bins
 
 
 def _make_vert_bins(horiz_bins, box_width):
     boxes = defaultdict(list)
-    for key in list(horiz_bins.keys()):
-        for i in range(len(horiz_bins[key])):
-            box_x = horiz_bins[key][i][1] // box_width
-            boxes[(box_x, key)].append((horiz_bins[key][i]))
+    for box_y in list(horiz_bins.keys()):
+        for y in range(len(horiz_bins[box_y])):
+            box_x = horiz_bins[box_y][y][1] // box_width
+            boxes[(box_x, box_y)].append((horiz_bins[box_y][y]))
 
     return boxes
 
 
 def _find_bin_max(boxes, maxes_per_box):
     freqs_dict = defaultdict(list)
-    for key in list(boxes.keys()):
-        max_intensities = sorted(boxes[key], key=lambda x: -x[0])[:maxes_per_box]
+    for box_x, box_y in list(boxes.keys()):
+        max_intensities = sorted(
+            boxes[(box_x, box_y)], key=lambda x: -x[0])[:maxes_per_box]
         for j in range(len(max_intensities)):
-            freqs_dict[max_intensities[j][2]].append(max_intensities[j][1])
+            y, x = max_intensities[j][2], max_intensities[j][1]
+            freqs_dict[y].append(x)
 
     return freqs_dict
 
