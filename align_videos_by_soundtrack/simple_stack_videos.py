@@ -15,12 +15,16 @@ from __future__ import absolute_import
 import json
 import sys
 import os
+import logging
 from itertools import chain
 
 import numpy as np
 
 from align_videos_by_soundtrack.align import SyncDetector
 from align_videos_by_soundtrack.communicate import check_call
+
+
+_logger = logging.getLogger(__name__)
 
 
 class _Filter(object):
@@ -331,6 +335,8 @@ See the help of alignment_info_by_sound_track.""")
         "-color_primaries", "bt709", "-color_trc", "bt709", "-colorspace", "bt709"
         ]
     args = parser.parse_args(args[1:])
+    logging.basicConfig(level=logging.DEBUG, stream=sys.stderr)
+
     files, fc, maps = _build(args)
     if args.mode == "script_bash":
         print("""\
