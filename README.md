@@ -1,13 +1,20 @@
 # Align videos/sound files timewise with help of their soundtracks
 
-This script based on alignment_by_row_channels.py by Allison Deal, see
+This package based on alignment_by_row_channels.py by Allison Deal, see
 https://github.com/allisonnicoledeal/VideoSync/blob/master/alignment_by_row_channels.py
 
+## Installation
+```
+cd align-videos-by-sound
+python setup.py install
+```
+
+After that, you can use this package as python module, or some sample application scripts (`alignment_info_by_sound_track`,  and`simple_stack_videos_by_sound_track`).
+
+## Scripts:
+### alignment_info_by_sound_track
 This program reports the offset difference for audio and video files,
 containing audio recordings from the same event (news event, concert event, theatre play or something else). It relies on ffmpeg being installed and the python libraries scipy and numpy.
-
-New contributions have been made by Hiroaki Itoh https://github.com/hhsprings with regards to multi file support, padding support, clean up and optimizations.
-
 
 Usage:
 
@@ -56,3 +63,13 @@ Example JSON output:
 Please note that this package does not include functionality to do the actual editing for trimming/padding yet.
 
 The script can handle more than two files
+
+### simple_stack_videos_by_sound_track
+This script basically merges the given videos by `hstack`, and `vstack`.
+
+Usage:
+
+    simple_stack_videos_by_sound_track <file1> <file2> [<file3>…]
+
+See `simple_stack_videos_by_sound_track --help` for more details.
+

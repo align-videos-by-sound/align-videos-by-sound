@@ -53,54 +53,40 @@ else:
         return s
 
 
-def _make_horiz_bins(data, fft_bin_size, overlap, box_height):
-    horiz_bins = defaultdict(list)
+def _mk_freq_trans_summary(data, fft_bin_size, overlap, box_height, box_width, maxes_per_box):
+    """
+    Return characteristic frequency transition's summary.
 
-    # process sample and set matrix height
+    The dictionaries to be returned are as follows:
+    * key: The frequency appearing as a peak in any time zone.
+    * value: A list of the times at which specific frequencies occurred.
+    """
+    freqs_dict = defaultdict(list)
+
+    boxes = defaultdict(list)
     for x, j in enumerate(range(int(-overlap), len(data), int(fft_bin_size - overlap))):
         sample_data = data[max(0, j):max(0, j) + fft_bin_size]
         if (len(sample_data) == fft_bin_size):  # if there are enough audio points left to create a full fft bin
-            intensities = _fourier(sample_data)  # intensities is list of fft results
-            for i in range(len(intensities)):
-                box_y = i // box_height
-                horiz_bins[box_y].append((intensities[i], x, i))  # (intensity, x, y)
+            intensities = np.abs(np.fft.fft(sample_data))  # intensities is list of fft results
+            for y in range(len(intensities) // 2):
+                box_y = y // box_height
+                box_x = x // box_width
+                # x: corresponding to time
+                # y: corresponding to freq
+                boxes[(box_x, box_y)].append((intensities[y], x, y))
+                if len(boxes[(box_x, box_y)]) > maxes_per_box:
+                    boxes[(box_x, box_y)] = sorted(
+                        boxes[(box_x, box_y)], key=lambda x: -x[0])[:maxes_per_box]
+    #
+    for box_x, box_y in list(boxes.keys()):
+        for intensity, x, y in boxes[(box_x, box_y)]:
+            freqs_dict[y].append(x)
 
-    return horiz_bins
-
-
-def _fourier(sample):  # , overlap):
-    """
-    Compute the one-dimensional discrete Fourier Transform
-
-    INPUT: list with length of number of samples per second
-    OUTPUT: list of real values len of num samples per second
-    """
-    fft_data = np.fft.fft(sample)  # Returns real and complex value pairs
-    fft_data = fft_data[:len(fft_data) // 2]
-    return list(np.sqrt(fft_data.real**2 + fft_data.imag**2))
-
-
-def _make_vert_bins(horiz_bins, box_width):
-    boxes = defaultdict(list)
-    for key in list(horiz_bins.keys()):
-        for i in range(len(horiz_bins[key])):
-            box_x = horiz_bins[key][i][1] // box_width
-            boxes[(box_x, key)].append((horiz_bins[key][i]))
-
-    return boxes
-
-
-def _find_bin_max(boxes, maxes_per_box):
-    freqs_dict = defaultdict(list)
-    for key in list(boxes.keys()):
-        max_intensities = sorted(boxes[key], key=lambda x: -x[0])[:maxes_per_box]
-        for j in range(len(max_intensities)):
-            freqs_dict[max_intensities[j][2]].append(max_intensities[j][1])
-
+    del boxes
     return freqs_dict
 
 
-def _find_freq_pairs(freqs_dict_orig, freqs_dict_sample):
+def _find_delay(freqs_dict_orig, freqs_dict_sample):
     keys = set(freqs_dict_sample.keys()) & set(freqs_dict_orig.keys())
     #
     if not keys:
@@ -108,17 +94,13 @@ def _find_freq_pairs(freqs_dict_orig, freqs_dict_sample):
             """I could not find a match. Consider giving a large value to \
 "max_misalignment" if the target medias are sure to shoot the same event.""")
     #
-    for key in keys:
-        for iitem in freqs_dict_sample[key]:  # determine time offset
-            for jitem in freqs_dict_orig[key]:
-                yield (iitem, jitem)
-
-
-def _find_delay(time_pairs):
     t_diffs = defaultdict(int)
-    for pair in time_pairs:
-        delta_t = pair[0] - pair[1]
-        t_diffs[delta_t] += 1
+    for key in keys:
+        for x_i in freqs_dict_sample[key]:  # determine time offset
+            for x_j in freqs_dict_orig[key]:
+                delta_t = x_i - x_j
+                t_diffs[delta_t] += 1
+
     t_diffs_sorted = sorted(list(t_diffs.items()), key=lambda x: x[1])
     # _logger.debug(t_diffs_sorted)
     time_delay = t_diffs_sorted[-1][0]
@@ -165,13 +147,11 @@ class SyncDetector(object):
         def _each(idx):
             wavfile = self._extract_audio(sample_rate, files[idx], idx)
             raw_audio, rate = communicate.read_audio(wavfile)
-            bins_dict = _make_horiz_bins(
+            ft_dict = _mk_freq_trans_summary(
                 raw_audio,
-                fft_bin_size, overlap, box_height)  # bins, overlap, box height
+                fft_bin_size, overlap,
+                box_height, box_width, samples_per_box)  # bins, overlap, box height, box width
             del raw_audio
-            boxes = _make_vert_bins(bins_dict, box_width)  # box width
-            ft_dict = _find_bin_max(boxes, samples_per_box)  # samples per box
-            del boxes
             return rate, ft_dict
         #
         tmp_result = [0.0]
@@ -183,8 +163,7 @@ class SyncDetector(object):
             rate, ft_dict2 = _each(i + 1)
 
             # Determie time delay
-            pairs = _find_freq_pairs(ft_dict1, ft_dict2)
-            delay = _find_delay(pairs)
+            delay = _find_delay(ft_dict1, ft_dict2)
             samples_per_sec = float(rate) / float(fft_bin_size)
             seconds = float(delay) / float(samples_per_sec)
 
@@ -262,7 +241,8 @@ def main(args=sys.argv):
         help='When handling media files with long playback time, \
 it may take a huge amount of time and huge memory. \
 In such a case, by changing this value to a small value, \
-it is possible to indicate the scanning range of the media file to the program.')
+it is possible to indicate the scanning range of the media file to the program. \
+(default: %(default)d)')
     parser.add_argument(
         '--known_delay_ge_map',
         type=str,
@@ -283,14 +263,14 @@ itself, the result will be more precise. However, this wastes a lot of memory, s
 can reduce memory consumption by downsampling (instead losing accuracy a bit). \
 The default value uses quite a lot of memory, but if it changes to a value of, for example, \
 44100, 22050, etc., although a large error of about several tens of milliseconds \
-increases, the processing time is greatly shortened.''')
+increases, the processing time is greatly shortened. (default: %(default)d)''')
     parser.add_argument(
         '--json',
         action="store_true",
         help='To report in json format.',)
     parser.add_argument(
         'file_names',
-        nargs="*",
+        nargs="+",
         help='Media files including audio streams. \
 It is possible to pass any media that ffmpeg can handle.',)
     args = parser.parse_args(args[1:])
