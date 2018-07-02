@@ -11,6 +11,7 @@ import logging
 
 __all__ = [
     "Filter",
+    "ConcatWithGapFilterGraphBuilder",
     ]
 
 _logger = logging.getLogger(__name__)
