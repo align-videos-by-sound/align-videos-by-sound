@@ -53,9 +53,17 @@ else:
         return s
 
 
-def _make_bins(data, fft_bin_size, overlap, box_height, box_width):
-    boxes = defaultdict(list)
+def _mk_freq_trans_summary(data, fft_bin_size, overlap, box_height, box_width, maxes_per_box):
+    """
+    Return characteristic frequency transition's summary.
 
+    The dictionaries to be returned are as follows:
+    * key: The frequency appearing as a peak in any time zone.
+    * value: A list of the times at which specific frequencies occurred.
+    """
+    freqs_dict = defaultdict(list)
+
+    boxes = defaultdict(list)
     for x, j in enumerate(range(int(-overlap), len(data), int(fft_bin_size - overlap))):
         sample_data = data[max(0, j):max(0, j) + fft_bin_size]
         if (len(sample_data) == fft_bin_size):  # if there are enough audio points left to create a full fft bin
@@ -66,12 +74,7 @@ def _make_bins(data, fft_bin_size, overlap, box_height, box_width):
                 # x: corresponding to time
                 # y: corresponding to freq
                 boxes[(box_x, box_y)].append((intensities[y], x, y))
-
-    return boxes
-
-
-def _find_bin_max(boxes, maxes_per_box):
-    freqs_dict = defaultdict(list)
+    #
     for box_x, box_y in list(boxes.keys()):
         max_intensities = sorted(
             boxes[(box_x, box_y)], key=lambda x: -x[0])[:maxes_per_box]
@@ -79,6 +82,7 @@ def _find_bin_max(boxes, maxes_per_box):
             y, x = max_intensities[j][2], max_intensities[j][1]
             freqs_dict[y].append(x)
 
+    del boxes
     return freqs_dict
 
 
@@ -143,12 +147,11 @@ class SyncDetector(object):
         def _each(idx):
             wavfile = self._extract_audio(sample_rate, files[idx], idx)
             raw_audio, rate = communicate.read_audio(wavfile)
-            boxes = _make_bins(
+            ft_dict = _mk_freq_trans_summary(
                 raw_audio,
-                fft_bin_size, overlap, box_height, box_width)  # bins, overlap, box height, box width
+                fft_bin_size, overlap,
+                box_height, box_width, samples_per_box)  # bins, overlap, box height, box width
             del raw_audio
-            ft_dict = _find_bin_max(boxes, samples_per_box)  # samples per box
-            del boxes
             return rate, ft_dict
         #
         tmp_result = [0.0]
