@@ -105,7 +105,16 @@ def read_audio(audio_file):
     INPUT: Audio file
     OUTPUT: Sets sample rate of wav file, Returns data read from wav file (numpy array of integers)
     """
-    rate, data = scipy.io.wavfile.read(audio_file)  # Return the sample rate (in samples/sec) and data from a WAV file
+    # Return the sample rate (in samples/sec) and data from a WAV file
+
+    # By using mmap you can reduce memory usage. I do not know whether this is good from
+    # the viewpoint of processing speed. However, when dealing with a realistic movie that
+    # this package deals with, the most problematic is the memory used. For example, If
+    # a poor PC with only 4 GB of physical memory handles a movie of about "VERY SHORT" 20
+    # minutes, it will cause you to fall into a state where you can not do any work.
+    rate, data = scipy.io.wavfile.read(
+        audio_file,
+        mmap=True)
     return data, rate
 
 
