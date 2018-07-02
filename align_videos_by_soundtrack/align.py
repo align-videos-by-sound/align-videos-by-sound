@@ -74,12 +74,12 @@ def _mk_freq_trans_summary(data, fft_bin_size, overlap, box_height, box_width, m
                 # x: corresponding to time
                 # y: corresponding to freq
                 boxes[(box_x, box_y)].append((intensities[y], x, y))
+                if len(boxes[(box_x, box_y)]) > maxes_per_box:
+                    boxes[(box_x, box_y)] = sorted(
+                        boxes[(box_x, box_y)], key=lambda x: -x[0])[:maxes_per_box]
     #
     for box_x, box_y in list(boxes.keys()):
-        max_intensities = sorted(
-            boxes[(box_x, box_y)], key=lambda x: -x[0])[:maxes_per_box]
-        for j in range(len(max_intensities)):
-            y, x = max_intensities[j][2], max_intensities[j][1]
+        for intensity, x, y in boxes[(box_x, box_y)]:
             freqs_dict[y].append(x)
 
     del boxes
