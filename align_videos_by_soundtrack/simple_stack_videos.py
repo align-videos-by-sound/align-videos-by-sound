@@ -16,150 +16,15 @@ import json
 import sys
 import os
 import logging
-from itertools import chain
 
 import numpy as np
 
 from align_videos_by_soundtrack.align import SyncDetector
 from align_videos_by_soundtrack.communicate import check_call
+from .ffmpeg_filter_graph import Filter, ConcatWithGapFilterGraphBuilder
 
 
 _logger = logging.getLogger(__name__)
-
-
-class _Filter(object):
-    """
-    >>> f = _Filter()
-    >>> f.iv.append("[0:v]")
-    >>> f.descs.append("scale=600:400")
-    >>> f.descs.append("setsar=1")
-    >>> f.ov.append("[v0]")
-    >>> print(f.to_str())
-    [0:v]scale=600:400,setsar=1[v0]
-    >>> #
-    >>> f = _Filter()
-    >>> f.iv.append("[0:v]")
-    >>> f.iv.append("[1:v]")
-    >>> f.descs.append("concat")
-    >>> f.ov.append("[vc0]")
-    >>> print(f.to_str())
-    [0:v][1:v]concat[vc0]
-    """
-    def __init__(self):
-        self.iv = []
-        self.ia = []
-        self.descs = []
-        self.ov = []
-        self.oa = []
-
-    def _labels_to_str(self, v, a):
-        if not v and a:
-            v = [""] * len(a)
-        if not a and v:
-            a = [""] * len(v)
-        return "".join(chain.from_iterable(zip(v, a)))
-        
-    def to_str(self):
-        ilabs = self._labels_to_str(self.iv, self.ia)
-        filterbody = ",".join(self.descs)
-        olabs = self._labels_to_str(self.ov, self.oa)
-        return ilabs + filterbody + olabs
-
-
-class _StreamWithPadBuilder(object):
-    def __init__(self, idx, w=960, h=540, sample_rate=44100):
-        self._idx = idx
-
-        # black video stream
-        fpadv = _Filter()
-        fpadv.descs.append(
-            "color=c=black:s=%dx%d:d={duration:.3f},setsar=1" % (w, h))
-        fpadv.ov.append("[{prepost}padv%d]" % idx)
-        self._tmpl_padv = (fpadv.to_str(), "".join(fpadv.ov))
-
-        # silence left; silence right; -> amerge
-        fpada = [_Filter(), _Filter(), _Filter()]
-        nch = 2
-        for i in range(nch):
-            fpada[i].descs.append("\
-sine=frequency=0:sample_rate={sample_rate}:d={{duration:.3f}}".format(
-                    sample_rate=sample_rate))
-            olab = "[{{prepost}}pada_c{i}_{idx}]".format(idx=idx, i=i)
-            fpada[i].oa.append(olab)
-            fpada[-1].iv.append(olab)
-        fpada[-1].descs.append("amerge={}".format(len(fpada[-1].iv)))
-        fpada[-1].oa.append("[{{prepost}}pada{idx}]".format(
-                idx=idx))
-        self._tmpl_pada = (
-            ";\n".join([fpada[i].to_str()
-                        for i in range(len(fpada))]),
-            "".join(fpada[-1].oa))
-
-        # filter to original video stream
-        fbodyv = _Filter()
-        fbodyv.iv.append("[%d:v]" % idx)
-        fbodyv.descs.append("{v_filter_extra}scale=%d:%d,setsar=1" % (w, h))
-        fbodyv.ov.append("[v%d]" % idx)
-        self._bodyv = (fbodyv.to_str(), "".join(fbodyv.ov))
-
-        # filter to original audio stream
-        fbodya = _Filter()
-        fbodya.ia.append("[%d:a]" % idx)
-        fbodya.descs.append("{{a_filter_extra}}aresample={sample_rate}".format(
-                sample_rate=sample_rate))
-        fbodya.oa.append("[a%d]" % idx)
-        self._bodya = (fbodya.to_str(), "".join(fbodya.oa))
-
-        #
-        self._result = []
-        self._fconcat = _Filter()
-
-    def _add_prepost(self, duration, prepost):
-        if duration <= 0:
-            return
-        self._result.append(
-            self._tmpl_padv[0].format(prepost=prepost, duration=duration))
-        self._fconcat.iv.append(self._tmpl_padv[1].format(prepost=prepost))
-        #
-        self._result.append(
-            self._tmpl_pada[0].format(prepost=prepost, duration=duration))
-        self._fconcat.ia.append(self._tmpl_pada[1].format(prepost=prepost))
-
-    def add_pre(self, duration):
-        self._add_prepost(duration, "pre")
-        return self
-
-    def add_body(self, v_filter_extra, a_filter_extra):
-        self._result.append(
-            self._bodyv[0].format(
-                v_filter_extra=v_filter_extra + "," if v_filter_extra else ""))
-        self._fconcat.iv.append(self._bodyv[1])
-        self._result.append(
-            self._bodya[0].format(
-                a_filter_extra=a_filter_extra + "," if a_filter_extra else ""))
-        self._fconcat.ia.append(self._bodya[1])
-
-        return self
-
-    def add_post(self, duration):
-        self._add_prepost(duration, "post")
-        return self
-
-    def build(self):
-        if len(self._fconcat.iv) > 1:
-            self._fconcat.descs.append(
-                "concat=n=%d:v=1:a=1" % len(self._fconcat.iv))
-            self._fconcat.ov.append("[vc%d]" % self._idx)
-            self._fconcat.oa.append("[ac%d]" % self._idx)
-            self._result.append(self._fconcat.to_str())
-        else:
-            self._fconcat.ov.extend(self._fconcat.iv)
-            self._fconcat.oa.extend(self._fconcat.ia)
-        #
-        return (
-            ";\n".join(self._result),
-            self._fconcat.ov[0],
-            self._fconcat.oa[0])
 
 
 class _StackVideosFilterGraphBuilder(object):
@@ -168,13 +33,12 @@ class _StackVideosFilterGraphBuilder(object):
         self._builders = []
         for i in range(shape[0] * shape[1]):
             self._builders.append(
-                _StreamWithPadBuilder(i, w, h, sample_rate))
+                ConcatWithGapFilterGraphBuilder(i, w, h, sample_rate))
 
     def set_paddings(self, idx, pre, post, v_filter_extra, a_filter_extra):
-        self._builders[idx].add_pre(pre)
-        self._builders[idx].add_body(
-            v_filter_extra, a_filter_extra)
-        self._builders[idx].add_post(post)
+        self._builders[idx].add_gap(pre)
+        self._builders[idx].add_body(idx, v_filter_extra, a_filter_extra)
+        self._builders[idx].add_gap(post)
 
     def build_each_streams(self):
         result = []
@@ -192,14 +56,17 @@ class _StackVideosFilterGraphBuilder(object):
 
         ovmaps = ['[v]']
         # stacks for video
-        fvstack = _Filter()
+        fvstack = Filter()
         if self._shape[0] > 1:
             for i in range(self._shape[1]):
-                fhstack = _Filter()
+                fhstack = Filter()
                 fhstack.iv.extend(ivmaps[i * self._shape[0]:(i + 1) * self._shape[0]])
-                fhstack.descs.append(
-                    "hstack=inputs={}:shortest=1".format(
-                        len(ivmaps[i * self._shape[0]:(i + 1) * self._shape[0]])))
+                inputs = len(ivmaps[
+                        i * self._shape[0]:(i + 1) * self._shape[0]])
+                fhstack.add_filter(
+                    "hstack",
+                    inputs="%d" % inputs,
+                    shortest="1")
                 olab = "[{}v]".format("%d" % (i + 1) if self._shape[1] > 1 else "")
                 fhstack.ov.append(olab)
                 result.append(fhstack.to_str())
@@ -210,9 +77,8 @@ class _StackVideosFilterGraphBuilder(object):
 
         if self._shape[1] > 1:
             # vstack
-            fvstack.descs.append(
-                "vstack=inputs={}:shortest=1".format(
-                    self._shape[1]))
+            fvstack.add_filter(
+                "vstack", inputs="%d" % self._shape[1], shortest="1")
             fvstack.ov.append("[v]")
             result.append(fvstack.to_str())
 
