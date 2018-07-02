@@ -129,7 +129,7 @@ def get_media_info(filename):
     # existence in getatime to understand easily.
     os.path.getatime(filename)
 
-    err = check_stderroutput(["ffprobe", filename])
+    err = check_stderroutput(["ffprobe", "-hide_banner", filename])
     rgx = r"Duration: (\d{2}):(\d{2}):(\d{2}).(\d{2})"
     tp = list(
         map(int,
@@ -180,7 +180,7 @@ def media_to_mono_wave(
     output = os.path.join(out_dir, audio_output)
     if not os.path.exists(output):
         cmd = [
-                "ffmpeg", "-y",
+                "ffmpeg", "-hide_banner", "-y",
                 _ffmpeg_ss_args[0], _ffmpeg_ss_args[1],
                 ffmpeg_t_args[0], ffmpeg_t_args[1],
                 "-i", "%s" % video_file,
