@@ -53,8 +53,9 @@ else:
         return s
 
 
-def _make_horiz_bins(data, fft_bin_size, overlap, box_height):
+def _make_bins(data, fft_bin_size, overlap, box_height, box_width):
     horiz_bins = defaultdict(list)
+    boxes = defaultdict(list)
 
     # process sample and set matrix height
     for x, j in enumerate(range(int(-overlap), len(data), int(fft_bin_size - overlap))):
@@ -67,11 +68,6 @@ def _make_horiz_bins(data, fft_bin_size, overlap, box_height):
                 # y: corresponding to freq
                 horiz_bins[box_y].append((intensities[y], x, y))
 
-    return horiz_bins
-
-
-def _make_vert_bins(horiz_bins, box_width):
-    boxes = defaultdict(list)
     for box_y in list(horiz_bins.keys()):
         for y in range(len(horiz_bins[box_y])):
             box_x = horiz_bins[box_y][y][1] // box_width
@@ -153,11 +149,10 @@ class SyncDetector(object):
         def _each(idx):
             wavfile = self._extract_audio(sample_rate, files[idx], idx)
             raw_audio, rate = communicate.read_audio(wavfile)
-            bins_dict = _make_horiz_bins(
+            boxes = _make_bins(
                 raw_audio,
-                fft_bin_size, overlap, box_height)  # bins, overlap, box height
+                fft_bin_size, overlap, box_height, box_width)  # bins, overlap, box height, box width
             del raw_audio
-            boxes = _make_vert_bins(bins_dict, box_width)  # box width
             ft_dict = _find_bin_max(boxes, samples_per_box)  # samples per box
             del boxes
             return rate, ft_dict
