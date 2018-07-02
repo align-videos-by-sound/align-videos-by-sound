@@ -120,7 +120,15 @@ class SyncDetector(object):
         return self
 
     def __exit__(self, type, value, tb):
-        shutil.rmtree(self._working_dir)
+        retry = 3
+        while retry > 0:
+            try:
+                shutil.rmtree(self._working_dir)
+                break
+            except:
+                import time
+                retry -= 1
+                time.sleep(1)
 
     def _extract_audio(self, sample_rate, video_file, idx):
         """
@@ -140,7 +148,7 @@ class SyncDetector(object):
             self._orig_infos[fn] = communicate.get_media_info(fn)
         return self._orig_infos[fn]
 
-    def _align(self, sample_rate, files, fft_bin_size=1024, overlap=0, box_height=512, box_width=43, samples_per_box=7):
+    def _align(self, sample_rate, files, fft_bin_size, overlap, box_height, box_width, samples_per_box):
         """
         Find time delays between video files
         """
@@ -237,7 +245,7 @@ def main(args=sys.argv):
     parser = argparse.ArgumentParser(prog=args[0], usage=_doc_template)
     parser.add_argument(
         '--max_misalignment',
-        type=float, default=2*60,
+        type=float, default=10*60,
         help='When handling media files with long playback time, \
 it may take a huge amount of time and huge memory. \
 In such a case, by changing this value to a small value, \
