@@ -348,7 +348,7 @@ If the key is blank, it means all input streams. Only single input / single outp
 filters can be used.""")
     #####
     parser.add_argument(
-        '--max_misalignment', type=float, default=2*60,
+        '--max_misalignment', type=float, default=10*60,
         help="""\
 See the help of alignment_info_by_sound_track. (default: %(default)d)""")
     parser.add_argument(
