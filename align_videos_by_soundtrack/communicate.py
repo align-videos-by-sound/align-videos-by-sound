@@ -190,7 +190,9 @@ def _parse_ffprobe_output(inputstr):
             continue
         ifidx, strmidx, strmtype, rest = m.group(1, 2, 3, 4)
         if strmtype == "Video":
-            enc, _, resol, _, fps, _, _, _ = _split_csv(rest)
+            spl = _split_csv(rest)
+            resol = list(filter(lambda item: re.search(r"[1-9]\d*x[1-9]\d*", item), spl))[0]
+            fps = list(filter(lambda item: re.search(r"[\d.]+ fps", item), spl))[0]
             strms_tmp[int(strmidx)] = {
                 "type": strmtype,
                 "resolution": [
@@ -200,7 +202,8 @@ def _parse_ffprobe_output(inputstr):
                 "fps": float(fps.split(" ")[0]),
                 }
         elif strmtype == "Audio":
-            enc, ar, chlay, _, _ = _split_csv(rest)
+            spl = _split_csv(rest)
+            ar = list(filter(lambda item: re.search(r"\d+ Hz", item), spl))[0]
             strms_tmp[int(strmidx)] = {
                 "type": strmtype,
                 "sample_rate": int(re.match(r"(\d+) Hz", ar).group(1)),
