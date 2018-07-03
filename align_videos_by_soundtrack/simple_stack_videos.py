@@ -182,7 +182,13 @@ def _build(args):
 def main(args=sys.argv):
     import argparse
 
-    parser = argparse.ArgumentParser()
+    parser = argparse.ArgumentParser(description="""\
+Suppose that a certain concert is shot by multiple people from multiple angles. \
+In most cases, shooting start and shooting end time have individual differences. \
+This program combines movies of multiple angles in a tile shape with "hstack" and "vstack", \
+based on sound track synchronization. Although it is a program for the main object \
+to arrange tile-like and simultaneous playback, it is possible to do a little \
+different thing from this. See the option description.""")
     parser.add_argument(
         "files", nargs="+",
         help="The media files which contains both video and audio.")
@@ -195,7 +201,7 @@ def main(args=sys.argv):
 Switching whether to produce bash shellscript or to call ffmpeg directly. (default: %(default)s)""")
     #####
     parser.add_argument(
-        '--audio_mode', choices=['amerge', 'multi_streams'], default='amerge',
+        '--audio_mode', choices=['amerge', 'multi_streams', 'individual'], default='amerge',
         help="""\
 Switching whether to merge audios or to keep each as multi streams, or \
 to pad each into the corresponding indivisual output file. --audio_mode='indivisual' \
