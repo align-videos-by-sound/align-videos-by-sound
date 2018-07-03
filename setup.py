@@ -6,6 +6,8 @@ import os.path
 try:
     from setuptools import setup
 except ImportError:
+    # TODO: Decide whether to force "setuptools" or even to users
+    #       with "distutils" only.
     from distutils.core import setup
     extra = {'scripts': [
             "bin/alignment_info_by_sound_track",
@@ -17,6 +19,7 @@ else:
         'entry_points': {
             'console_scripts': [
                 'alignment_info_by_sound_track = align_videos_by_soundtrack.align:main',
+                'concat_videos_by_sound_track = align_videos_by_soundtrack.concat:main',
                 'simple_stack_videos_by_sound_track = align_videos_by_soundtrack.simple_stack_videos:main',
                 'trim_by_sound_track = align_videos_by_soundtrack.trim:main',
                 ],
