@@ -190,16 +190,16 @@ class SyncDetector(object):
         # build result
         pad_pre = result - result.min()
         trim_pre = -(pad_pre - pad_pre.max())
-        orig_dur = np.array([
-                self._get_media_info(fn)["duration"]
-                for fn in files])
+        infos = [self._get_media_info(fn) for fn in files]
+        orig_dur = np.array([inf["duration"] for inf in infos])
+        strms_info = [inf["streams"] for inf in infos]
         pad_post = list(
             (pad_pre + orig_dur).max() - (pad_pre + orig_dur))
         trim_post = list(
             (orig_dur - trim_pre) - (orig_dur - trim_pre).min())
 
         #
-        return pad_pre, trim_pre, orig_dur, pad_post, trim_post
+        return pad_pre, trim_pre, orig_dur, strms_info, pad_post, trim_post
 
     def align(self, files, fft_bin_size=1024, overlap=0, box_height=512, box_width=43, samples_per_box=7,
               max_misalignment=0, known_delay_ge_map={}):
@@ -207,7 +207,7 @@ class SyncDetector(object):
         Find time delays between video files
         """
         # First, try finding delays roughly by passing low sample rate.
-        pad_pre, trim_pre, orig_dur, pad_post, trim_post = self._align(
+        pad_pre, trim_pre, orig_dur, strms_info, pad_post, trim_post = self._align(
             44100 // 12, files, fft_bin_size, overlap, box_height, box_width, samples_per_box,
             max_misalignment, known_delay_ge_map)
 
@@ -219,7 +219,7 @@ class SyncDetector(object):
         max_misalignment = 15
 
         # Finally, try finding delays precicely
-        pad_pre, trim_pre, orig_dur, pad_post, trim_post = self._align(
+        pad_pre, trim_pre, orig_dur, strms_info, pad_post, trim_post = self._align(
             self._sample_rate, files, fft_bin_size, overlap, box_height, box_width, samples_per_box,
             max_misalignment, known_delay_ge_map)
 
@@ -233,6 +233,7 @@ class SyncDetector(object):
                     "orig_duration": orig_dur[i],
                     "trim_post": trim_post[i],
                     "pad_post": pad_post[i],
+                    "orig_streams": strms_info[i],
                     }
                 ]
             for i in range(len(files))]
