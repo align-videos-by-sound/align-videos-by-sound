@@ -36,6 +36,8 @@ import logging
 import numpy as np
 
 from . import communicate
+from .utils import check_and_decode_filenames
+
 
 __all__ = [
     'SyncDetector',
@@ -43,14 +45,6 @@ __all__ = [
     ]
 
 _logger = logging.getLogger(__name__)
-
-
-if hasattr("", "decode"):  # python 2
-    def _decode(s):
-        return s.decode(sys.stdout.encoding)
-else:
-    def _decode(s):
-        return s
 
 
 def _mk_freq_trans_summary(data, fft_bin_size, overlap, box_height, box_width, maxes_per_box):
@@ -109,11 +103,9 @@ def _find_delay(freqs_dict_orig, freqs_dict_sample):
 
 
 class SyncDetector(object):
-    def __init__(self, max_misalignment=0, sample_rate=48000, known_delay_ge_map={}):
+    def __init__(self, sample_rate=48000):
         self._working_dir = tempfile.mkdtemp()
-        self._max_misalignment = max_misalignment
         self._sample_rate = sample_rate
-        self._known_delay_ge_map = known_delay_ge_map
         self._orig_infos = {}  # per filename
 
     def __enter__(self):
@@ -130,7 +122,7 @@ class SyncDetector(object):
                 retry -= 1
                 time.sleep(1)
 
-    def _extract_audio(self, sample_rate, video_file, idx):
+    def _extract_audio(self, sample_rate, video_file, starttime_offset, duration):
         """
         Extract audio from video file, save as wav auido file
 
@@ -139,8 +131,8 @@ class SyncDetector(object):
         """
         return communicate.media_to_mono_wave(
             video_file, self._working_dir,
-            starttime_offset=self._known_delay_ge_map.get(idx, 0),
-            duration=self._max_misalignment * 2,
+            starttime_offset=starttime_offset,
+            duration=duration,
             sample_rate=sample_rate)
 
     def _get_media_info(self, fn):
@@ -148,12 +140,16 @@ class SyncDetector(object):
             self._orig_infos[fn] = communicate.get_media_info(fn)
         return self._orig_infos[fn]
 
-    def _align(self, sample_rate, files, fft_bin_size, overlap, box_height, box_width, samples_per_box):
+    def _align(self, sample_rate, files, fft_bin_size, overlap, box_height, box_width, samples_per_box,
+               max_misalignment, known_delay_ge_map):
         """
         Find time delays between video files
         """
         def _each(idx):
-            wavfile = self._extract_audio(sample_rate, files[idx], idx)
+            wavfile = self._extract_audio(
+                sample_rate, files[idx],
+                starttime_offset=known_delay_ge_map.get(idx, 0),
+                duration=max_misalignment * 2)
             raw_audio, rate = communicate.read_audio(wavfile)
             ft_dict = _mk_freq_trans_summary(
                 raw_audio,
@@ -179,44 +175,47 @@ class SyncDetector(object):
             tmp_result.append(-seconds)
 
         result = np.array(tmp_result)
-        if self._known_delay_ge_map:
+        if known_delay_ge_map:
             for i in range(len(result)):
-                if i in self._known_delay_ge_map:
-                    result += self._known_delay_ge_map[i]
-                    result[i] -= self._known_delay_ge_map[i]
+                if i in known_delay_ge_map:
+                    result += known_delay_ge_map[i]
+                    result[i] -= known_delay_ge_map[i]
 
         # build result
         pad_pre = result - result.min()
         trim_pre = -(pad_pre - pad_pre.max())
-        orig_dur = np.array([
-                self._get_media_info(fn)["duration"]
-                for fn in files])
+        infos = [self._get_media_info(fn) for fn in files]
+        orig_dur = np.array([inf["duration"] for inf in infos])
+        strms_info = [inf["streams"] for inf in infos]
         pad_post = list(
             (pad_pre + orig_dur).max() - (pad_pre + orig_dur))
         trim_post = list(
             (orig_dur - trim_pre) - (orig_dur - trim_pre).min())
 
         #
-        return pad_pre, trim_pre, orig_dur, pad_post, trim_post
+        return pad_pre, trim_pre, orig_dur, strms_info, pad_post, trim_post
 
-    def align(self, files, fft_bin_size=1024, overlap=0, box_height=512, box_width=43, samples_per_box=7):
+    def align(self, files, fft_bin_size=1024, overlap=0, box_height=512, box_width=43, samples_per_box=7,
+              max_misalignment=0, known_delay_ge_map={}):
         """
         Find time delays between video files
         """
         # First, try finding delays roughly by passing low sample rate.
-        pad_pre, trim_pre, orig_dur, pad_post, trim_post = self._align(
-            44100 // 12, files, fft_bin_size, overlap, box_height, box_width, samples_per_box)
+        pad_pre, trim_pre, orig_dur, strms_info, pad_post, trim_post = self._align(
+            44100 // 12, files, fft_bin_size, overlap, box_height, box_width, samples_per_box,
+            max_misalignment, known_delay_ge_map)
 
         # update knwown map, and max_misalignment
-        self._known_delay_ge_map = {
+        known_delay_ge_map = {
             i: max(0.0, int(trim_pre[i] - 5.0))
             for i in range(len(trim_pre))
             }
-        self._max_misalignment = 15
+        max_misalignment = 15
 
         # Finally, try finding delays precicely
-        pad_pre, trim_pre, orig_dur, pad_post, trim_post = self._align(
-            self._sample_rate, files, fft_bin_size, overlap, box_height, box_width, samples_per_box)
+        pad_pre, trim_pre, orig_dur, strms_info, pad_post, trim_post = self._align(
+            self._sample_rate, files, fft_bin_size, overlap, box_height, box_width, samples_per_box,
+            max_misalignment, known_delay_ge_map)
 
         #
         return [
@@ -228,6 +227,7 @@ class SyncDetector(object):
                     "orig_duration": orig_dur[i],
                     "trim_post": trim_post[i],
                     "pad_post": pad_post[i],
+                    "orig_streams": strms_info[i],
                     }
                 ]
             for i in range(len(files))]
@@ -292,21 +292,21 @@ It is possible to pass any media that ffmpeg can handle.',)
 
     logging.basicConfig(level=logging.DEBUG, stream=sys.stderr)
 
+    file_specs = []
     if args.file_names and len(args.file_names) >= 2:
-        file_specs = list(map(_decode, map(os.path.abspath, args.file_names)))
+        file_specs = check_and_decode_filenames(args.file_names)
         # _logger.debug(file_specs)
     else:  # No pipe and no input file, print help text and exit
         _bailout(parser)
-    non_existing_files = [path for path in file_specs if not os.path.isfile(path)]
-    if non_existing_files:
-        print("** The following are not existing files: %s **" % (','.join(non_existing_files),))
+    if not file_specs:
         _bailout(parser)
 
     with SyncDetector(
-        max_misalignment=args.max_misalignment,
-        sample_rate=args.sample_rate,
-        known_delay_ge_map=known_delay_ge_map) as det:
-        result = det.align(file_specs)
+        sample_rate=args.sample_rate) as det:
+        result = det.align(
+            file_specs,
+            max_misalignment=args.max_misalignment,
+            known_delay_ge_map=known_delay_ge_map)
     if args.json:
         print(json.dumps({'edit_list': result}, indent=4))
     else:

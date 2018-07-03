@@ -118,27 +118,113 @@ def read_audio(audio_file):
     return data, rate
 
 
+def _parse_ffprobe_output(inputstr):
+    r"""
+    >>> import json
+    >>> s = '''Input #0, mov,mp4,m4a,3gp,3g2,mj2, from 'input.mp4':
+    ...  Metadata:
+    ...    major_brand     : isom
+    ...    minor_version   : 512
+    ...    compatible_brands: isomiso2avc1mp41
+    ...    encoder         : Lavf56.40.101
+    ...  Duration: 00:24:59.55, start: 0.000000, bitrate: 4457 kb/s
+    ...    Stream #0:0(und): Video: h264 (High) (avc1 / 0x31637661), yuv420p(tv, bt709), 1920x1080 [SAR 1:1 DAR 16:9], 4324 kb/s, 29.97 fps, 29.97 tbr, 90k tbn, 59.94 tbc (default)
+    ...    Metadata:
+    ...      handler_name    : VideoHandler
+    ...    Stream #0:1(und): Audio: aac (LC) (mp4a / 0x6134706D), 44100 Hz, stereo, fltp, 125 kb/s (default)
+    ...    Metadata:
+    ...      handler_name    : SoundHandler'''
+    >>> result = _parse_ffprobe_output(s)
+    >>> print(json.dumps(result, indent=2, sort_keys=True).replace(', \n', ',\n'))
+    {
+      "duration": 1499.55,
+      "streams": [
+        {
+          "fps": 29.97,
+          "resolution": [
+            [
+              1920,
+              1080
+            ],
+            "[SAR 1:1 DAR 16:9]"
+          ],
+          "type": "Video"
+        },
+        {
+          "sample_rate": 44100,
+          "type": "Audio"
+        }
+      ]
+    }
+    """
+    def _split_csv(s):
+        ss = s.split(", ")
+        result = []
+        i = 0
+        while i < len(ss):
+            result.append(ss[i])
+            while i < len(ss) - 1 and \
+                    result[-1].count("(") != result[-1].count(")"):
+                i += 1
+                result[-1] = ", ".join((result[-1], ss[i]))
+            i += 1
+        return result
+        
+    result = {"streams": []}
+    lines = inputstr.split("\n")
+    rgx = r"Duration: (\d{2}):(\d{2}):(\d{2}).(\d{2})"
+    while lines:
+        line = lines.pop(0)
+        m = re.search(rgx, line)
+        if m:
+            tp = list(map(int, m.group(1, 2, 3, 4)))
+            result["duration"] = \
+                tp[0] * 60 * 60 + tp[1] * 60 + tp[2] + tp[3] / 100.
+            break
+    #
+    rgx = r"Stream #(\d+):(\d+)\(\w+\): ([^:]+): (.*)$"
+    strms_tmp = {}
+    for line in lines:
+        m = re.search(rgx, line)
+        if not m:
+            continue
+        ifidx, strmidx, strmtype, rest = m.group(1, 2, 3, 4)
+        if strmtype == "Video":
+            spl = _split_csv(rest)
+            resol = list(filter(lambda item: re.search(r"[1-9]\d*x[1-9]\d*", item), spl))[0]
+            fps = list(filter(lambda item: re.search(r"[\d.]+ fps", item), spl))[0]
+            strms_tmp[int(strmidx)] = {
+                "type": strmtype,
+                "resolution": [
+                    list(map(int, s.split("x"))) if i == 0 else s
+                    for i, s in enumerate(resol.partition(" ")[0::2])
+                    ],
+                "fps": float(fps.split(" ")[0]),
+                }
+        elif strmtype == "Audio":
+            spl = _split_csv(rest)
+            ar = list(filter(lambda item: re.search(r"\d+ Hz", item), spl))[0]
+            strms_tmp[int(strmidx)] = {
+                "type": strmtype,
+                "sample_rate": int(re.match(r"(\d+) Hz", ar).group(1)),
+                }
+        #elif strmtype == "Subtitle"?
+    for i in sorted(strms_tmp.keys()):
+        result["streams"].append(strms_tmp[i])
+    return result
+
+
 def get_media_info(filename):
     """
     return the information extracted by ffprobe.
-
-    for now, this function extracts only its duration.
     """
     # If processing is progressed when there is no input file, exception
     # reporting is considerably troublesome. Therefore, we decide to check
     # existence in getatime to understand easily.
     os.path.getatime(filename)
 
-    err = check_stderroutput(["ffprobe", filename])
-    rgx = r"Duration: (\d{2}):(\d{2}):(\d{2}).(\d{2})"
-    tp = list(
-        map(int,
-            re.search(
-                rgx,
-                err.decode("utf-8")).group(1, 2, 3, 4)))
-    return {
-        "duration": tp[0] * 60 * 60 + tp[1] * 60 + tp[2] + tp[3] / 100.,
-        }
+    err = check_stderroutput(["ffprobe", "-hide_banner", filename])
+    return _parse_ffprobe_output(err.decode("utf-8"))
 
 
 def duration_to_hhmmss(duration):
@@ -180,7 +266,7 @@ def media_to_mono_wave(
     output = os.path.join(out_dir, audio_output)
     if not os.path.exists(output):
         cmd = [
-                "ffmpeg", "-y",
+                "ffmpeg", "-hide_banner", "-y",
                 _ffmpeg_ss_args[0], _ffmpeg_ss_args[1],
                 ffmpeg_t_args[0], ffmpeg_t_args[1],
                 "-i", "%s" % video_file,
@@ -193,3 +279,8 @@ def media_to_mono_wave(
         #_logger.debug(cmd)
         check_call(cmd, stderr=open(os.devnull, 'w'))
     return output
+
+
+if __name__ == '__main__':
+    import doctest
+    doctest.testmod()
