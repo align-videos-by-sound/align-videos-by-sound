@@ -22,6 +22,7 @@ import numpy as np
 from align_videos_by_soundtrack.align import SyncDetector
 from align_videos_by_soundtrack.communicate import check_call
 from .ffmpeg_filter_graph import Filter, ConcatWithGapFilterGraphBuilder
+from .utils import check_and_decode_filenames
 
 
 _logger = logging.getLogger(__name__)
@@ -120,7 +121,10 @@ pan=stereo|\\
 
 def _build(args):
     shape = json.loads(args.shape) if args.shape else (2, 2)
-    files = list(map(os.path.abspath, args.files))
+    files = check_and_decode_filenames(args.files)
+    if not files:
+        sys.exit(1)
+
     if len(files) < shape[0] * shape[1]:
         files = files + [files[i % len(files)]
                          for i in range(shape[0] * shape[1] - len(files))]
@@ -236,7 +240,7 @@ See the help of alignment_info_by_sound_track. (default: %(default)d)""")
         ]
     args = parser.parse_args(args[1:])
     logging.basicConfig(level=logging.DEBUG, stream=sys.stderr)
-
+    
     files, fc, maps = _build(args)
     if args.mode == "script_bash":
         print("""\

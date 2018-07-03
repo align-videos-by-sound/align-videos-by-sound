@@ -9,10 +9,15 @@ from __future__ import unicode_literals
 from __future__ import absolute_import
 
 import sys
+import logging
 
 from align_videos_by_soundtrack.align import SyncDetector
 from align_videos_by_soundtrack.communicate import (
     check_call, duration_to_hhmmss)
+from .utils import check_and_decode_filenames
+
+
+_logger = logging.getLogger(__name__)
 
 
 def main(args=sys.argv):
@@ -20,7 +25,7 @@ def main(args=sys.argv):
 
     parser = argparse.ArgumentParser()
     parser.add_argument(
-        "files", nargs="*",
+        "files", nargs="+",
         help="The media files which contain at least audio stream.")
     parser.add_argument(
         "-o", "--outdir", default="_dest")
@@ -31,12 +36,18 @@ def main(args=sys.argv):
         help="""\
 See the help of alignment_info_by_sound_track.""")
     args = parser.parse_args(args[1:])
+    logging.basicConfig(level=logging.DEBUG, stream=sys.stderr)
+
+    files = check_and_decode_filenames(args.files)
+    if not files:
+        parser.print_usage()
+        sys.exit(1)
 
     import os
     if not os.path.exists(args.outdir):
         os.mkdir(args.outdir)
     with SyncDetector() as sd:
-        infos = sd.align(args.files, max_misalignment=args.max_misalignment)
+        infos = sd.align(files, max_misalignment=args.max_misalignment)
 
         for fn, editinfo in infos:
             start_offset = editinfo["trim"]

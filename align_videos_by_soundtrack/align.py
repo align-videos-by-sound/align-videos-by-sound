@@ -36,6 +36,8 @@ import logging
 import numpy as np
 
 from . import communicate
+from .utils import check_and_decode_filenames
+
 
 __all__ = [
     'SyncDetector',
@@ -43,14 +45,6 @@ __all__ = [
     ]
 
 _logger = logging.getLogger(__name__)
-
-
-if hasattr("", "decode"):  # python 2
-    def _decode(s):
-        return s.decode(sys.stdout.encoding)
-else:
-    def _decode(s):
-        return s
 
 
 def _mk_freq_trans_summary(data, fft_bin_size, overlap, box_height, box_width, maxes_per_box):
@@ -298,14 +292,13 @@ It is possible to pass any media that ffmpeg can handle.',)
 
     logging.basicConfig(level=logging.DEBUG, stream=sys.stderr)
 
+    file_specs = []
     if args.file_names and len(args.file_names) >= 2:
-        file_specs = list(map(_decode, map(os.path.abspath, args.file_names)))
+        file_specs = check_and_decode_filenames(args.file_names)
         # _logger.debug(file_specs)
     else:  # No pipe and no input file, print help text and exit
         _bailout(parser)
-    non_existing_files = [path for path in file_specs if not os.path.isfile(path)]
-    if non_existing_files:
-        print("** The following are not existing files: %s **" % (','.join(non_existing_files),))
+    if not file_specs:
         _bailout(parser)
 
     with SyncDetector(
