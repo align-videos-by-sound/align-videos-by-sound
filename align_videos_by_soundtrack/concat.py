@@ -14,6 +14,7 @@ from __future__ import absolute_import
 import sys
 import logging
 import json
+from itertools import chain
 
 from align_videos_by_soundtrack.align import SyncDetector
 from align_videos_by_soundtrack.communicate import check_call
@@ -166,6 +167,16 @@ filters can be used.""")
         ]
     files, fc, vmap, amap = _build(args)
     maps = [vmap, amap]
+    def _quote(s):
+        if args.mode == "script_bash":
+            import pipes
+            return pipes.quote(s)
+        return s
+    ifile_args = list(chain.from_iterable(
+            [('-i', _quote(f)) for f in files]))
+    map_args = list(chain.from_iterable(
+            [("-map", _quote(m)) for m in maps])) + [_quote(args.outfile)]
+    #
     if args.mode == "script_bash":
         print("""\
 #! /bin/sh
@@ -175,22 +186,17 @@ ffmpeg -y \\
   -filter_complex "
 {}
 " {} \\
-  {} \\
-  "{}"
-""".format(" ".join(['-i "{}"'.format(f) for f in files]),
+  {}
+""".format(" ".join(ifile_args),
            fc,
-           " ".join(["-map '%s'" % m for m in maps]),
            " ".join(extra_ffargs),
-           args.outfile))
+           " ".join(map_args)))
     else:
         cmd = ["ffmpeg", "-y"]
-        for fn in files:
-            cmd.extend(["-i", fn])
+        cmd.extend(ifile_args)
         cmd.extend(["-filter_complex", fc])
-        for m in maps:
-            cmd.extend(["-map", m])
         cmd.extend(extra_ffargs)
-        cmd.append(args.outfile)
+        cmd.extend(map_args)
 
         check_call(cmd)
 
