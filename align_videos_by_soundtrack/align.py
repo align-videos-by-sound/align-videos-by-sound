@@ -130,7 +130,7 @@ class SyncDetector(object):
                 retry -= 1
                 time.sleep(1)
 
-    def _extract_audio(self, sample_rate, video_file, idx):
+    def _extract_audio(self, sample_rate, video_file, starttime_offset, duration):
         """
         Extract audio from video file, save as wav auido file
 
@@ -139,8 +139,8 @@ class SyncDetector(object):
         """
         return communicate.media_to_mono_wave(
             video_file, self._working_dir,
-            starttime_offset=self._known_delay_ge_map.get(idx, 0),
-            duration=self._max_misalignment * 2,
+            starttime_offset=starttime_offset,
+            duration=duration,
             sample_rate=sample_rate)
 
     def _get_media_info(self, fn):
@@ -153,7 +153,10 @@ class SyncDetector(object):
         Find time delays between video files
         """
         def _each(idx):
-            wavfile = self._extract_audio(sample_rate, files[idx], idx)
+            wavfile = self._extract_audio(
+                sample_rate, files[idx],
+                starttime_offset=self._known_delay_ge_map.get(idx, 0),
+                duration=self._max_misalignment * 2)
             raw_audio, rate = communicate.read_audio(wavfile)
             ft_dict = _mk_freq_trans_summary(
                 raw_audio,
