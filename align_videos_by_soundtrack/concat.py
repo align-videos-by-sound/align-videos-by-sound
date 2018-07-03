@@ -91,7 +91,7 @@ def _build(args):
         bld.add_video_content(i + 1, vf(i + 1))
         bld.add_audio_content(i + 1, af(i + 1))
     fc, vmap, amap = bld.build()
-    return [args.base] + targets, fc, vmap, amap
+    return [base] + targets, fc, vmap, amap
 
 
 def main(args=sys.argv):
