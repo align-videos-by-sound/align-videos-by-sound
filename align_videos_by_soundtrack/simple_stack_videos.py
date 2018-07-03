@@ -16,11 +16,12 @@ import json
 import sys
 import os
 import logging
+from itertools import chain
 
 import numpy as np
 
-from align_videos_by_soundtrack.align import SyncDetector
-from align_videos_by_soundtrack.communicate import check_call
+from .align import SyncDetector
+from .communicate import check_call
 from .ffmpeg_filter_graph import Filter, ConcatWithGapFilterGraphBuilder
 from .utils import check_and_decode_filenames
 
@@ -162,12 +163,12 @@ def _build(args):
     filters = []
     r0, vm0, am0 = b.build_each_streams()
     filters.extend(r0)
-    if args.video_mode == "stack":
+    if args.video_mode == "stack" and args.audio_mode != "indivisual":
         r1, vm1 = b.build_stack_videos(vm0)
         filters.extend(r1)
     else:
         vm1 = vm0
-    if args.audio_mode == "amerge":
+    if args.audio_mode == "amerge" and args.video_mode != "indivisual":
         r2, am = b.build_amerge_audio(am0)
         filters.extend(r2)
     else:
@@ -175,13 +176,19 @@ def _build(args):
     #
     filter_complex = ";\n\n".join(filters)
     #
-    return files, filter_complex, vm1 + am
+    return files, filter_complex, (vm1, am)
 
 
 def main(args=sys.argv):
     import argparse
 
-    parser = argparse.ArgumentParser()
+    parser = argparse.ArgumentParser(description="""\
+Suppose that a certain concert is shot by multiple people from multiple angles. \
+In most cases, shooting start and shooting end time have individual differences. \
+This program combines movies of multiple angles in a tile shape with "hstack" and "vstack", \
+based on sound track synchronization. Although it is a program for the main object \
+to arrange tile-like and simultaneous playback, it is possible to do a little \
+different thing from this. See the option description.""")
     parser.add_argument(
         "files", nargs="+",
         help="The media files which contains both video and audio.")
@@ -194,9 +201,11 @@ def main(args=sys.argv):
 Switching whether to produce bash shellscript or to call ffmpeg directly. (default: %(default)s)""")
     #####
     parser.add_argument(
-        '--audio_mode', choices=['amerge', 'multi_streams'], default='amerge',
+        '--audio_mode', choices=['amerge', 'multi_streams', 'individual'], default='amerge',
         help="""\
-Switching whether to merge audios or to keep each as multi streams. (default: %(default)s)""")
+Switching whether to merge audios or to keep each as multi streams, or \
+to pad each into the corresponding indivisual output file. --audio_mode='indivisual' \
+implies --video_mode='indivisual'. (default: %(default)s)""")
     #
     parser.add_argument(
         '--a_filter_extra', type=str,
@@ -207,9 +216,11 @@ If the key is blank, it means all input streams. Only single input / single outp
 filters can be used.""")
     ###
     parser.add_argument(
-        '--video_mode', choices=['stack', 'multi_streams'], default='stack',
+        '--video_mode', choices=['stack', 'multi_streams', 'indivisual'], default='stack',
         help="""\
-Switching whether to stack videos or to keep each as multi streams. (default: %(default)s)""")
+Switching whether to stack videos or to keep each as multi streams, or \
+to pad each into the corresponding indivisual output file. --video_mode='indivisual' \
+implies --audio_mode='indivisual'. (default: %(default)s)""")
     #
     parser.add_argument(
         '--v_filter_extra', type=str,
@@ -242,6 +253,26 @@ See the help of alignment_info_by_sound_track. (default: %(default)d)""")
     logging.basicConfig(level=logging.DEBUG, stream=sys.stderr)
     
     files, fc, maps = _build(args)
+    def _quote(s):
+        if args.mode == "script_bash":
+            import pipes
+            return pipes.quote(s)
+        return s
+
+    ifile_args = list(chain.from_iterable(
+            [('-i', _quote(f)) for f in files]))
+    if args.video_mode == 'indivisual' or args.audio_mode == 'indivisual':
+        outbase, outext = os.path.splitext(args.outfile)
+        outfiles = [_quote("{}_{:02d}{}".format(outbase, i, outext))
+                    for i in range(len(maps[0]))]
+        map_args = list(chain.from_iterable(
+                [("-map", _quote(mv), "-map", _quote(ma), _quote(fn))
+                 for mv, ma, fn in zip(maps[0], maps[1], outfiles)]))
+    else:
+        map_args = list(chain.from_iterable(
+                [("-map", _quote(m))
+                 for m in maps[0] + maps[1]])) + [_quote(args.outfile)]
+
     if args.mode == "script_bash":
         print("""\
 #! /bin/sh
@@ -251,22 +282,17 @@ ffmpeg -y \\
   -filter_complex "
 {}
 " {} \\
-  {} \\
-  "{}"
-""".format(" ".join(['-i "{}"'.format(f) for f in files]),
+  {}
+""".format(" ".join(ifile_args),
            fc,
-           " ".join(["-map '%s'" % m for m in maps]),
            " ".join(extra_ffargs),
-           args.outfile))
+           " ".join(map_args)))
     else:
         cmd = ["ffmpeg", "-y"]
-        for fn in files:
-            cmd.extend(["-i", fn])
+        cmd.extend(ifile_args)
         cmd.extend(["-filter_complex", fc])
-        for m in maps:
-            cmd.extend(["-map", m])
         cmd.extend(extra_ffargs)
-        cmd.append(args.outfile)
+        cmd.extend(map_args)
 
         check_call(cmd)
 

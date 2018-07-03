@@ -202,7 +202,7 @@ class SyncDetector(object):
         """
         # First, try finding delays roughly by passing low sample rate.
         pad_pre, trim_pre, orig_dur, strms_info, pad_post, trim_post = self._align(
-            44100 // 12, files, fft_bin_size, overlap, box_height, box_width, samples_per_box,
+            44100 // 4, files, fft_bin_size, overlap, box_height, box_width, samples_per_box,
             max_misalignment, known_delay_ge_map)
 
         # update knwown map, and max_misalignment
@@ -210,7 +210,7 @@ class SyncDetector(object):
             i: max(0.0, int(trim_pre[i] - 5.0))
             for i in range(len(trim_pre))
             }
-        max_misalignment = 15
+        max_misalignment = 30
 
         # Finally, try finding delays precicely
         pad_pre, trim_pre, orig_dur, strms_info, pad_post, trim_post = self._align(
