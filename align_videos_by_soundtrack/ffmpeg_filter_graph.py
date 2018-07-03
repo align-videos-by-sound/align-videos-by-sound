@@ -144,13 +144,19 @@ class ConcatWithGapFilterGraphBuilder(object):
         self._gapno = 0
         self._numbody = 0
 
-    def add_gap(self, duration):
+    def add_video_gap(self, duration):
         if duration <= 0:
             return self
         self._result.append(
             self._tmpl_gapv[0].format(gapno=self._gapno, duration=duration))
         self._fconcat.iv.append(self._tmpl_gapv[1].format(gapno=self._gapno))
-        #
+        self._gapno += 1
+
+        return self
+
+    def add_audio_gap(self, duration):
+        if duration <= 0:
+            return self
         self._result.append(
             self._tmpl_gapa[0].format(gapno=self._gapno, duration=duration))
         self._fconcat.ia.append(self._tmpl_gapa[1].format(gapno=self._gapno))
