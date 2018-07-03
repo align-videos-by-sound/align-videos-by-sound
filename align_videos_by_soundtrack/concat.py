@@ -103,7 +103,12 @@ def _build(args):
 def main(args=sys.argv):
     import argparse
 
-    parser = argparse.ArgumentParser()
+    parser = argparse.ArgumentParser(description="""\
+For a concert movie, now, \
+there is one movie that shoots the whole event and a movie \
+divided into two by stopping shooting (or cutting by editing) \
+once. This script combines the latter with filling the gap, \
+based on the former sound tracks.""")
     parser.add_argument(
         "base",
         help="""\
