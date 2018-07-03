@@ -83,7 +83,7 @@ This script combines the latter with filling the gap, based on the former sound 
 
 Usage:
 
-    concat_videos_by_sound_track <base> <divided1> <divided2> [<divided1>…]
+    concat_videos_by_sound_track <base> <divided1> <divided2> [<divided3>…]
 
 Audio-only media may be passed to "base". For now, except for "base", both video stream
 and audio stream must be included.
