@@ -35,8 +35,8 @@ See the help of alignment_info_by_sound_track.""")
     import os
     if not os.path.exists(args.outdir):
         os.mkdir(args.outdir)
-    with SyncDetector(max_misalignment=args.max_misalignment) as sd:
-        infos = sd.align(args.files)
+    with SyncDetector() as sd:
+        infos = sd.align(args.files, max_misalignment=args.max_misalignment)
 
         for fn, editinfo in infos:
             start_offset = editinfo["trim"]

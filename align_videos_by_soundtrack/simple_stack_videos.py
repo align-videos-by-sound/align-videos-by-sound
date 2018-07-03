@@ -132,9 +132,8 @@ def _build(args):
     #
     b = _StackVideosFilterGraphBuilder(
         shape=shape, w=args.w, h=args.h, sample_rate=args.sample_rate)
-    with SyncDetector(
-        max_misalignment=args.max_misalignment) as det:
-        for i, inf in enumerate(det.align(files)):
+    with SyncDetector() as det:
+        for i, inf in enumerate(det.align(files, max_misalignment=args.max_misalignment)):
             pre, post = inf[1]["pad"], inf[1]["pad_post"]
             if not (pre > 0 and post > 0):
                 # FIXME:

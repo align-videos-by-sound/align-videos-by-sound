@@ -109,11 +109,9 @@ def _find_delay(freqs_dict_orig, freqs_dict_sample):
 
 
 class SyncDetector(object):
-    def __init__(self, max_misalignment=0, sample_rate=48000, known_delay_ge_map={}):
+    def __init__(self, sample_rate=48000):
         self._working_dir = tempfile.mkdtemp()
-        self._max_misalignment = max_misalignment
         self._sample_rate = sample_rate
-        self._known_delay_ge_map = known_delay_ge_map
         self._orig_infos = {}  # per filename
 
     def __enter__(self):
@@ -203,26 +201,27 @@ class SyncDetector(object):
         #
         return pad_pre, trim_pre, orig_dur, pad_post, trim_post
 
-    def align(self, files, fft_bin_size=1024, overlap=0, box_height=512, box_width=43, samples_per_box=7):
+    def align(self, files, fft_bin_size=1024, overlap=0, box_height=512, box_width=43, samples_per_box=7,
+              max_misalignment=0, known_delay_ge_map={}):
         """
         Find time delays between video files
         """
         # First, try finding delays roughly by passing low sample rate.
         pad_pre, trim_pre, orig_dur, pad_post, trim_post = self._align(
             44100 // 12, files, fft_bin_size, overlap, box_height, box_width, samples_per_box,
-            self._max_misalignment, self._known_delay_ge_map)
+            max_misalignment, known_delay_ge_map)
 
         # update knwown map, and max_misalignment
-        self._known_delay_ge_map = {
+        known_delay_ge_map = {
             i: max(0.0, int(trim_pre[i] - 5.0))
             for i in range(len(trim_pre))
             }
-        self._max_misalignment = 15
+        max_misalignment = 15
 
         # Finally, try finding delays precicely
         pad_pre, trim_pre, orig_dur, pad_post, trim_post = self._align(
             self._sample_rate, files, fft_bin_size, overlap, box_height, box_width, samples_per_box,
-            self._max_misalignment, self._known_delay_ge_map)
+            max_misalignment, known_delay_ge_map)
 
         #
         return [
@@ -309,10 +308,11 @@ It is possible to pass any media that ffmpeg can handle.',)
         _bailout(parser)
 
     with SyncDetector(
-        max_misalignment=args.max_misalignment,
-        sample_rate=args.sample_rate,
-        known_delay_ge_map=known_delay_ge_map) as det:
-        result = det.align(file_specs)
+        sample_rate=args.sample_rate) as det:
+        result = det.align(
+            file_specs,
+            max_misalignment=args.max_misalignment,
+            known_delay_ge_map=known_delay_ge_map)
     if args.json:
         print(json.dumps({'edit_list': result}, indent=4))
     else:
