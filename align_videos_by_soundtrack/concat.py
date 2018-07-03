@@ -45,21 +45,15 @@ def _build(args):
     af = lambda i: ",".join(filter(None, [a_filter_extra.get(""), a_filter_extra.get("%d" % i)]))
 
     gaps = []
-    prev_dur = 0.0
     width, height = 0, 0
     sample_rate = 0
     base_has_video = None
+    start = 0
     with SyncDetector() as sd:
-        known_delay_ge_map = {0: 0}
         for i in range(len(targets)):
-            res = sd.align(
-                [base, targets[i]],
-                known_delay_ge_map=known_delay_ge_map)
-            start = prev_dur - known_delay_ge_map[0]
-            gaps.append((start, res[1][1]["pad"] - start))
-            #
-            prev_dur = res[1][1]["orig_duration"]
-            known_delay_ge_map[0] = res[1][1]["trim"]
+            res = sd.align([base, targets[i]])
+            gaps.append((start, res[0][1]["trim"] - start))
+            start = res[0][1]["trim"] + (res[1][1]["orig_duration"] - res[1][1]["trim"])
 
             # detect resolution, etc.
             if base_has_video is None:
