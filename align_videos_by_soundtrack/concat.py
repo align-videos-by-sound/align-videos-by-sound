@@ -16,8 +16,8 @@ import logging
 import json
 from itertools import chain
 
-from align_videos_by_soundtrack.align import SyncDetector
-from align_videos_by_soundtrack.communicate import check_call
+from .align import SyncDetector
+from .communicate import check_call
 from .ffmpeg_filter_graph import (
     Filter,
     ConcatWithGapFilterGraphBuilder,
