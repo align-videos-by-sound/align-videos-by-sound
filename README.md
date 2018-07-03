@@ -9,7 +9,7 @@ cd align-videos-by-sound
 python setup.py install
 ```
 
-After that, you can use this package as python module, or some sample application scripts (`alignment_info_by_sound_track`,  and`simple_stack_videos_by_sound_track`).
+After that, you can use this package as python module, or some sample application scripts (`alignment_info_by_sound_track`, `simple_stack_videos_by_sound_track`, etc).
 
 ## Scripts:
 ### alignment_info_by_sound_track
@@ -73,3 +73,19 @@ Usage:
 
 See `simple_stack_videos_by_sound_track --help` for more details.
 
+
+### concat_videos_by_sound_track
+Regarding an event such as a certain concert, suppose that there is unedited media
+that shoots and records the whole, and on the other hand, there are multiple divided
+media such as stop recording halfway.
+
+This script combines the latter with filling the gap, based on the former sound tracks.
+
+Usage:
+
+    concat_videos_by_sound_track <base> <divided1> <divided2> [<divided1>…]
+
+Audio-only media may be passed to "base". For now, except for "base", both video stream
+and audio stream must be included.
+
+See `concat_videos_by_sound_track --help` for more details.
