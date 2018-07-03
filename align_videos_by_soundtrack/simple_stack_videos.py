@@ -37,7 +37,8 @@ class _StackVideosFilterGraphBuilder(object):
 
     def set_paddings(self, idx, pre, post, v_filter_extra, a_filter_extra):
         self._builders[idx].add_gap(pre)
-        self._builders[idx].add_body(idx, v_filter_extra, a_filter_extra)
+        self._builders[idx].add_video_content(idx, v_filter_extra)
+        self._builders[idx].add_audio_content(idx, a_filter_extra)
         self._builders[idx].add_gap(post)
 
     def build_each_streams(self):
