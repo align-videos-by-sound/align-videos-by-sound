@@ -10,6 +10,7 @@ from itertools import chain
 import logging
 
 __all__ = [
+    "mk_single_filter_body",
     "Filter",
     "ConcatWithGapFilterGraphBuilder",
     ]
@@ -27,13 +28,13 @@ _filter_defaults = {
     }
 
 
-def _mk_single_filter_body(name, *args, **kwargs):
+def mk_single_filter_body(name, *args, **kwargs):
     r"""
-    >>> print(_mk_single_filter_body("color", s="960x540", d="123.45"))
+    >>> print(mk_single_filter_body("color", s="960x540", d="123.45"))
     color=c=black:d=123.45:s=960x540
-    >>> print(_mk_single_filter_body("scale", "600", "400"))
+    >>> print(mk_single_filter_body("scale", "600", "400"))
     scale=600:400
-    >>> print(_mk_single_filter_body("concat"))
+    >>> print(mk_single_filter_body("concat"))
     concat
     """
     paras = _filter_defaults.get(name, {})
@@ -84,7 +85,7 @@ class Filter(object):
         
     def add_filter(self, name, *args, **kwargs):
         self._filters.append(
-            _mk_single_filter_body(name, *args, **kwargs))
+            mk_single_filter_body(name, *args, **kwargs))
 
     def to_str(self):
         ilabs = self._labels_to_str(self.iv, self.ia)
