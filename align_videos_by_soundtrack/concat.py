@@ -21,14 +21,22 @@ from .ffmpeg_filter_graph import (
     Filter,
     ConcatWithGapFilterGraphBuilder,
     )
+from .utils import check_and_decode_filenames
 
 
 _logger = logging.getLogger(__name__)
 
 
 def _build(args):
-    base = args.base
-    targets = [args.splitted_earliest] + args.splitted
+    chk = check_and_decode_filenames([args.base])
+    if not chk:
+        sys.exit(1)
+    base = chk[0]
+
+    targets = check_and_decode_filenames([args.splitted_earliest] + args.splitted)
+    if not targets:
+        sys.exit(1)
+
     a_filter_extra = json.loads(args.a_filter_extra) if args.a_filter_extra else {}
     v_filter_extra = json.loads(args.v_filter_extra) if args.v_filter_extra else {}
 
