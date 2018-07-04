@@ -16,6 +16,8 @@ import logging
 import json
 from itertools import chain
 
+import numpy as np
+
 from .align import SyncDetector
 from .communicate import check_call
 from .ffmpeg_filter_graph import (
@@ -79,7 +81,9 @@ def _build(args):
     bld = ConcatWithGapFilterGraphBuilder("c", w=width, h=height, sample_rate=sample_rate)
     for i in range(len(targets)):
         start, gap = gaps[i]
-        if gap > 0:
+        if gap > 0 and (
+            not np.isclose(start, 0) or args.start_gap != "omit"):
+
             if targets_have_video or has_video[0]:
                 if not has_video[0] or args.video_gap == "black":
                     bld.add_video_gap(gap)
@@ -168,6 +172,13 @@ Filter to add to the video input stream. Pass in JSON format, in dictionary form
 The key "0" is of base audio media. \
 If the key is blank, it means all input streams. Only single input / single output \
 filters can be used.""")
+    #####
+    parser.add_argument(
+        '--start_gap', choices=['omit', 'pad'], default='omit',
+        help="""\
+Controling whether to align the start position with `base` or not. \
+The default is "do not align" (`omit`) because it is not normally suitable for the \
+purpose of `concatanate`.""")
     #####
     args = parser.parse_args(args[1:])
     if len(args.splitted) < 2:
