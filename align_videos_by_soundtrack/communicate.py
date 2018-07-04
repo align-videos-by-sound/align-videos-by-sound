@@ -156,6 +156,22 @@ def _parse_ffprobe_output(inputstr):
         }
       ]
     }
+    >>> s = '''Input #0, wav, from '1.wav':
+    ...  Metadata:
+    ...    encoder         : Lavf57.71.100
+    ...  Duration: 00:05:19.51, bitrate: 1411 kb/s
+    ...    Stream #0:0: Audio: pcm_s16le ([1][0][0][0] / 0x0001), 44100 Hz, 2 channels, s16, 1411 kb/s'''
+    >>> result = _parse_ffprobe_output(s)
+    >>> print(json.dumps(result, indent=2, sort_keys=True).replace(', \n', ',\n'))
+    {
+      "duration": 319.51,
+      "streams": [
+        {
+          "sample_rate": 44100,
+          "type": "Audio"
+        }
+      ]
+    }
     """
     def _split_csv(s):
         ss = s.split(", ")
@@ -182,7 +198,7 @@ def _parse_ffprobe_output(inputstr):
                 tp[0] * 60 * 60 + tp[1] * 60 + tp[2] + tp[3] / 100.
             break
     #
-    rgx = r"Stream #(\d+):(\d+)\(\w+\): ([^:]+): (.*)$"
+    rgx = r"Stream #(\d+):(\d+)(?:\(\w+\))?: ([^:]+): (.*)$"
     strms_tmp = {}
     for line in lines:
         m = re.search(rgx, line)
