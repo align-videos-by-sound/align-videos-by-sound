@@ -50,10 +50,14 @@ def _build(args):
     base_has_video = None
     start = 0
     with SyncDetector() as sd:
+        known_delay_ge_map = {}
         for i in range(len(targets)):
-            res = sd.align([base, targets[i]])
+            res = sd.align(
+                [base, targets[i]],
+                known_delay_ge_map=known_delay_ge_map)
             gaps.append((start, res[0][1]["trim"] - start))
             start = res[0][1]["trim"] + (res[1][1]["orig_duration"] - res[1][1]["trim"])
+            known_delay_ge_map[0] = start
 
             # detect resolution, etc.
             if base_has_video is None:
