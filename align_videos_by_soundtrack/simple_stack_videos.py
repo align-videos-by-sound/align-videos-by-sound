@@ -250,7 +250,10 @@ See the help of alignment_info_by_sound_track. (default: %(default)d)""")
         "-color_primaries", "bt709", "-color_trc", "bt709", "-colorspace", "bt709"
         ]
     args = parser.parse_args(args[1:])
-    logging.basicConfig(level=logging.DEBUG, stream=sys.stderr)
+    logging.basicConfig(
+        level=logging.DEBUG,
+        stream=sys.stderr,
+        format="%(created)f|%(levelname)5s:%(module)s#%(funcName)s:%(message)s")
     
     files, fc, maps = _build(args)
     def _quote(s):

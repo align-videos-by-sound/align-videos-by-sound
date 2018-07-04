@@ -184,7 +184,10 @@ purpose of `concatanate`.""")
     if len(args.splitted) < 2:
         parser.print_usage()
         sys.exit(1)
-    logging.basicConfig(level=logging.DEBUG, stream=sys.stderr)
+    logging.basicConfig(
+        level=logging.DEBUG,
+        stream=sys.stderr,
+        format="%(created)f|%(levelname)5s:%(module)s#%(funcName)s:%(message)s")
 
     files, fc, vmap, amap = _build(args)
     extra_ffargs = [

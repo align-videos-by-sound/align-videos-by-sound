@@ -290,7 +290,10 @@ It is possible to pass any media that ffmpeg can handle.',)
             for k in known_delay_ge_map.keys()
             }
 
-    logging.basicConfig(level=logging.DEBUG, stream=sys.stderr)
+    logging.basicConfig(
+        level=logging.DEBUG,
+        stream=sys.stderr,
+        format="%(created)f|%(levelname)5s:%(module)s#%(funcName)s:%(message)s")
 
     file_specs = []
     if args.file_names and len(args.file_names) >= 2:
