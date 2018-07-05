@@ -25,6 +25,7 @@ from .ffmpeg_filter_graph import (
     ConcatWithGapFilterGraphBuilder,
     )
 from .utils import check_and_decode_filenames
+from . import _cache
 
 
 _logger = logging.getLogger(__name__)
@@ -49,7 +50,7 @@ def _build(args):
     gaps = []
     #
     einf = []
-    with SyncDetector() as sd:
+    with SyncDetector(dont_cache=args.dont_cache) as sd:
         start = 0
         known_delay_ge_map = {}
         for i in range(len(targets)):
@@ -179,6 +180,13 @@ filters can be used.""")
 Controling whether to align the start position with `base` or not. \
 The default is "do not align" (`omit`) because it is not normally suitable for the \
 purpose of `concatanate`.""")
+    #####
+    parser.add_argument(
+        '--dont_cache',
+        action="store_true",
+        help='''Normally, this script stores the result in cache ("%s"). \
+If you hate this behaviour, specify this option.''' % (
+            _cache.cache_root_dir))
     #####
     args = parser.parse_args(args[1:])
     if len(args.splitted) < 2:
