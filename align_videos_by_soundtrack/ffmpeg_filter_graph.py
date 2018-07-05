@@ -188,21 +188,26 @@ class ConcatWithGapFilterGraphBuilder(object):
         return self
 
     def build(self):
-        if len(self._fconcat.iv) > 1:
-            self._fconcat.add_filter(
-                "concat",
-                n="%d" % len(self._fconcat.iv), v="1", a="1")
+        niv = len(self._fconcat.iv)
+        nia = len(self._fconcat.ia)
+        if max(niv, nia) <= 1:
+            # we can't concat only one stream!
+            raise Exception("You haven't prepared to call this method.")
+        self._fconcat.add_filter(
+            "concat",
+            n="%d" % max(niv, nia),
+            v="1" if niv > 1 else "0",
+            a="1" if nia > 1 else "0")
+        if niv > 1:
             self._fconcat.ov.append("[vc%s]" % self._ident)
+        if nia > 1:
             self._fconcat.oa.append("[ac%s]" % self._ident)
-            self._result.append(self._fconcat.to_str())
-        else:
-            self._fconcat.ov.extend(self._fconcat.iv)
-            self._fconcat.oa.extend(self._fconcat.ia)
+        self._result.append(self._fconcat.to_str())
         #
         return (
             ";\n".join(self._result),
-            self._fconcat.ov[0],
-            self._fconcat.oa[0])
+            self._fconcat.ov[-1] if self._fconcat.ov else "",
+            self._fconcat.oa[-1] if self._fconcat.oa else "")
 
 
 #

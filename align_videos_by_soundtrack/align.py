@@ -37,6 +37,7 @@ import numpy as np
 
 from . import communicate
 from .utils import check_and_decode_filenames
+from . import _cache
 
 
 __all__ = [
@@ -62,15 +63,14 @@ def _mk_freq_trans_summary(data, fft_bin_size, overlap, box_height, box_width, m
         sample_data = data[max(0, j):max(0, j) + fft_bin_size]
         if (len(sample_data) == fft_bin_size):  # if there are enough audio points left to create a full fft bin
             intensities = np.abs(np.fft.fft(sample_data))  # intensities is list of fft results
+            box_x = x // box_width
             for y in range(len(intensities) // 2):
                 box_y = y // box_height
-                box_x = x // box_width
                 # x: corresponding to time
                 # y: corresponding to freq
                 boxes[(box_x, box_y)].append((intensities[y], x, y))
                 if len(boxes[(box_x, box_y)]) > maxes_per_box:
-                    boxes[(box_x, box_y)] = sorted(
-                        boxes[(box_x, box_y)], key=lambda x: -x[0])[:maxes_per_box]
+                    boxes[(box_x, box_y)].remove(min(boxes[(box_x, box_y)]))
     #
     for box_x, box_y in list(boxes.keys()):
         for intensity, x, y in boxes[(box_x, box_y)]:
@@ -103,9 +103,10 @@ def _find_delay(freqs_dict_orig, freqs_dict_sample):
 
 
 class SyncDetector(object):
-    def __init__(self, sample_rate=48000):
+    def __init__(self, sample_rate=48000, dont_cache=False):
         self._working_dir = tempfile.mkdtemp()
         self._sample_rate = sample_rate
+        self._dont_cache = dont_cache
         self._orig_infos = {}  # per filename
 
     def __enter__(self):
@@ -146,16 +147,39 @@ class SyncDetector(object):
         Find time delays between video files
         """
         def _each(idx):
-            wavfile = self._extract_audio(
-                sample_rate, files[idx],
+            exaud_args = dict(
+                sample_rate=sample_rate, video_file=files[idx],
                 starttime_offset=known_delay_ge_map.get(idx, 0),
                 duration=max_misalignment * 2)
+            # First, try getting from cache.
+            ck = None
+            if not self._dont_cache:
+                for_cache = dict(exaud_args)
+                for_cache.update(dict(
+                        fft_bin_size=fft_bin_size,
+                        overlap=overlap,
+                        box_height=box_height,
+                        box_width=box_width,
+                        samples_per_box=samples_per_box,
+                        atime=os.path.getatime(files[idx])
+                        ))
+                ck = _cache.make_cache_key(**for_cache)
+                cv = _cache.get("_align", ck)
+                if cv:
+                    return cv
+            else:
+                _cache.clean("_align")
+
+            # Not found in cache.
+            wavfile = self._extract_audio(**exaud_args)
             raw_audio, rate = communicate.read_audio(wavfile)
             ft_dict = _mk_freq_trans_summary(
                 raw_audio,
                 fft_bin_size, overlap,
                 box_height, box_width, samples_per_box)  # bins, overlap, box height, box width
             del raw_audio
+            if not self._dont_cache:
+                _cache.set("_align", ck, (rate, ft_dict))
             return rate, ft_dict
         #
         tmp_result = [0.0]
@@ -273,6 +297,12 @@ The default value uses quite a lot of memory, but if it changes to a value of, f
 44100, 22050, etc., although a large error of about several tens of milliseconds \
 increases, the processing time is greatly shortened. (default: %(default)d)''')
     parser.add_argument(
+        '--dont_cache',
+        action="store_true",
+        help='''Normally, this script stores the result in cache ("%s"). \
+If you hate this behaviour, specify this option.''' % (
+            _cache.cache_root_dir))
+    parser.add_argument(
         '--json',
         action="store_true",
         help='To report in json format.',)
@@ -290,7 +320,10 @@ It is possible to pass any media that ffmpeg can handle.',)
             for k in known_delay_ge_map.keys()
             }
 
-    logging.basicConfig(level=logging.DEBUG, stream=sys.stderr)
+    logging.basicConfig(
+        level=logging.DEBUG,
+        stream=sys.stderr,
+        format="%(created)f|%(levelname)5s:%(module)s#%(funcName)s:%(message)s")
 
     file_specs = []
     if args.file_names and len(args.file_names) >= 2:
@@ -302,7 +335,8 @@ It is possible to pass any media that ffmpeg can handle.',)
         _bailout(parser)
 
     with SyncDetector(
-        sample_rate=args.sample_rate) as det:
+        sample_rate=args.sample_rate,
+        dont_cache=args.dont_cache) as det:
         result = det.align(
             file_specs,
             max_misalignment=args.max_misalignment,

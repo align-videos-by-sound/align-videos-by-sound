@@ -24,6 +24,7 @@ from .align import SyncDetector
 from .communicate import check_call
 from .ffmpeg_filter_graph import Filter, ConcatWithGapFilterGraphBuilder
 from .utils import check_and_decode_filenames
+from . import _cache
 
 
 _logger = logging.getLogger(__name__)
@@ -137,7 +138,7 @@ def _build(args):
     #
     b = _StackVideosFilterGraphBuilder(
         shape=shape, w=args.w, h=args.h, sample_rate=args.sample_rate)
-    with SyncDetector() as det:
+    with SyncDetector(dont_cache=args.dont_cache) as det:
         for i, inf in enumerate(det.align(files, max_misalignment=args.max_misalignment)):
             pre, post = inf[1]["pad"], inf[1]["pad_post"]
             if not (pre > 0 and post > 0):
@@ -249,8 +250,18 @@ See the help of alignment_info_by_sound_track. (default: %(default)d)""")
     extra_ffargs = [
         "-color_primaries", "bt709", "-color_trc", "bt709", "-colorspace", "bt709"
         ]
+    parser.add_argument(
+        '--dont_cache',
+        action="store_true",
+        help='''Normally, this script stores the result in cache ("%s"). \
+If you hate this behaviour, specify this option.''' % (
+            _cache.cache_root_dir))
+    #####
     args = parser.parse_args(args[1:])
-    logging.basicConfig(level=logging.DEBUG, stream=sys.stderr)
+    logging.basicConfig(
+        level=logging.DEBUG,
+        stream=sys.stderr,
+        format="%(created)f|%(levelname)5s:%(module)s#%(funcName)s:%(message)s")
     
     files, fc, maps = _build(args)
     def _quote(s):
