@@ -62,15 +62,14 @@ def _mk_freq_trans_summary(data, fft_bin_size, overlap, box_height, box_width, m
         sample_data = data[max(0, j):max(0, j) + fft_bin_size]
         if (len(sample_data) == fft_bin_size):  # if there are enough audio points left to create a full fft bin
             intensities = np.abs(np.fft.fft(sample_data))  # intensities is list of fft results
+            box_x = x // box_width
             for y in range(len(intensities) // 2):
                 box_y = y // box_height
-                box_x = x // box_width
                 # x: corresponding to time
                 # y: corresponding to freq
                 boxes[(box_x, box_y)].append((intensities[y], x, y))
                 if len(boxes[(box_x, box_y)]) > maxes_per_box:
-                    boxes[(box_x, box_y)] = sorted(
-                        boxes[(box_x, box_y)], key=lambda x: -x[0])[:maxes_per_box]
+                    boxes[(box_x, box_y)].remove(min(boxes[(box_x, box_y)]))
     #
     for box_x, box_y in list(boxes.keys()):
         for intensity, x, y in boxes[(box_x, box_y)]:
