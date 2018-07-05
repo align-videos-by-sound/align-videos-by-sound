@@ -21,7 +21,7 @@ from itertools import chain
 import numpy as np
 
 from .align import SyncDetector
-from .communicate import check_call
+from .communicate import check_call, parse_time
 from .ffmpeg_filter_graph import Filter, ConcatWithGapFilterGraphBuilder
 from .utils import check_and_decode_filenames
 from . import _cache
@@ -139,7 +139,7 @@ def _build(args):
     b = _StackVideosFilterGraphBuilder(
         shape=shape, w=args.w, h=args.h, sample_rate=args.sample_rate)
     with SyncDetector(dont_cache=args.dont_cache) as det:
-        for i, inf in enumerate(det.align(files, max_misalignment=args.max_misalignment)):
+        for i, inf in enumerate(det.align(files, max_misalignment=parse_time(args.max_misalignment))):
             pre, post = inf[1]["pad"], inf[1]["pad_post"]
             if not (pre > 0 and post > 0):
                 # FIXME:
@@ -232,9 +232,9 @@ If the key is blank, it means all input streams. Only single input / single outp
 filters can be used.""")
     #####
     parser.add_argument(
-        '--max_misalignment', type=float, default=10*60,
+        '--max_misalignment', type=str, default="600",
         help="""\
-See the help of alignment_info_by_sound_track. (default: %(default)d)""")
+See the help of alignment_info_by_sound_track. (default: %(default)s)""")
     parser.add_argument(
         '--shape', type=str, default="[2, 2]",
         help="The shape of the tile, like '[2, 2]'. (default: %(default)s)")
@@ -247,9 +247,20 @@ See the help of alignment_info_by_sound_track. (default: %(default)d)""")
     parser.add_argument(
         '--height-per-cell', dest="h", type=int, default=540,
         help="Height of the cell. (default: %(default)d)")
-    extra_ffargs = [
-        "-color_primaries", "bt709", "-color_trc", "bt709", "-colorspace", "bt709"
-        ]
+    #####
+    parser.add_argument(
+        '--v_extra_ffargs', type=str,
+        default=json.dumps(["-color_primaries", "bt709", "-color_trc", "bt709", "-colorspace", "bt709"]),
+        help="""\
+Additional arguments to ffmpeg for output video streams. Pass list in JSON format. \
+(default: '%(default)s')""")
+    parser.add_argument(
+        '--a_extra_ffargs', type=str,
+        default=json.dumps([]),
+        help="""\
+Additional arguments to ffmpeg for output audio streams. Pass list in JSON format. \
+(default: '%(default)s')""")
+    #####
     parser.add_argument(
         '--dont_cache',
         action="store_true",
@@ -263,7 +274,7 @@ If you hate this behaviour, specify this option.''' % (
         stream=sys.stderr,
         format="%(created)f|%(levelname)5s:%(module)s#%(funcName)s:%(message)s")
     
-    files, fc, maps = _build(args)
+    files, fc, (vmap, amap) = _build(args)
     def _quote(s):
         if args.mode == "script_bash":
             import pipes
@@ -272,17 +283,25 @@ If you hate this behaviour, specify this option.''' % (
 
     ifile_args = list(chain.from_iterable(
             [('-i', _quote(f)) for f in files]))
+    v_extra_ffargs = list(map(_quote, json.loads(args.v_extra_ffargs))) if vmap else []
+    a_extra_ffargs = list(map(_quote, json.loads(args.a_extra_ffargs))) if amap else []
     if args.video_mode == 'indivisual' or args.audio_mode == 'indivisual':
         outbase, outext = os.path.splitext(args.outfile)
         outfiles = [_quote("{}_{:02d}{}".format(outbase, i, outext))
-                    for i in range(len(maps[0]))]
+                    for i in range(len(vmap))]
         map_args = list(chain.from_iterable(
-                [("-map", _quote(mv), "-map", _quote(ma), _quote(fn))
-                 for mv, ma, fn in zip(maps[0], maps[1], outfiles)]))
+                [["-map", _quote(mv), "-map", _quote(ma)] + \
+                     v_extra_ffargs + \
+                     a_extra_ffargs + \
+                     [_quote(fn)]
+                 for mv, ma, fn in zip(vmap, amap, outfiles)]))
     else:
         map_args = list(chain.from_iterable(
                 [("-map", _quote(m))
-                 for m in maps[0] + maps[1]])) + [_quote(args.outfile)]
+                 for m in vmap + amap])) + \
+                 v_extra_ffargs + \
+                 a_extra_ffargs + \
+                 [_quote(args.outfile)]
 
     if args.mode == "script_bash":
         print("""\
@@ -292,17 +311,14 @@ ffmpeg -y \\
   {} \\
   -filter_complex "
 {}
-" {} \\
-  {}
+" {}
 """.format(" ".join(ifile_args),
            fc,
-           " ".join(extra_ffargs),
            " ".join(map_args)))
     else:
         cmd = ["ffmpeg", "-y"]
         cmd.extend(ifile_args)
         cmd.extend(["-filter_complex", fc])
-        cmd.extend(extra_ffargs)
         cmd.extend(map_args)
 
         check_call(cmd)

@@ -269,12 +269,12 @@ def main(args=sys.argv):
     parser = argparse.ArgumentParser(prog=args[0], usage=_doc_template)
     parser.add_argument(
         '--max_misalignment',
-        type=float, default=10*60,
+        type=str, default="600",
         help='When handling media files with long playback time, \
 it may take a huge amount of time and huge memory. \
 In such a case, by changing this value to a small value, \
 it is possible to indicate the scanning range of the media file to the program. \
-(default: %(default)d)')
+(default: %(default)s)')
     parser.add_argument(
         '--known_delay_ge_map',
         type=str,
@@ -339,7 +339,7 @@ It is possible to pass any media that ffmpeg can handle.',)
         dont_cache=args.dont_cache) as det:
         result = det.align(
             file_specs,
-            max_misalignment=args.max_misalignment,
+            max_misalignment=communicate.parse_time(args.max_misalignment),
             known_delay_ge_map=known_delay_ge_map)
     if args.json:
         print(json.dumps({'edit_list': result}, indent=4))

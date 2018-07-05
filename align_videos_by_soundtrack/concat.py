@@ -182,6 +182,19 @@ The default is "do not align" (`omit`) because it is not normally suitable for t
 purpose of `concatanate`.""")
     #####
     parser.add_argument(
+        '--v_extra_ffargs', type=str,
+        default=json.dumps(["-color_primaries", "bt709", "-color_trc", "bt709", "-colorspace", "bt709"]),
+        help="""\
+Additional arguments to ffmpeg for output video streams. Pass list in JSON format. \
+(default: '%(default)s')""")
+    parser.add_argument(
+        '--a_extra_ffargs', type=str,
+        default=json.dumps([]),
+        help="""\
+Additional arguments to ffmpeg for output audio streams. Pass list in JSON format. \
+(default: '%(default)s')""")
+    #####
+    parser.add_argument(
         '--dont_cache',
         action="store_true",
         help='''Normally, this script stores the result in cache ("%s"). \
@@ -198,19 +211,21 @@ If you hate this behaviour, specify this option.''' % (
         format="%(created)f|%(levelname)5s:%(module)s#%(funcName)s:%(message)s")
 
     files, fc, vmap, amap = _build(args)
-    extra_ffargs = [
-        "-color_primaries", "bt709", "-color_trc", "bt709", "-colorspace", "bt709"
-        ] if vmap else []
-    maps = filter(None, [vmap, amap])
     def _quote(s):
         if args.mode == "script_bash":
             import pipes
             return pipes.quote(s)
         return s
+    v_extra_ffargs = list(map(_quote, json.loads(args.v_extra_ffargs))) if vmap else []
+    a_extra_ffargs = list(map(_quote, json.loads(args.a_extra_ffargs))) if amap else []
+    maps = filter(None, [vmap, amap])
     ifile_args = list(chain.from_iterable(
             [('-i', _quote(f)) for f in files]))
     map_args = list(chain.from_iterable(
-            [("-map", _quote(m)) for m in maps])) + [_quote(args.outfile)]
+            [("-map", _quote(m)) for m in maps])) + \
+            v_extra_ffargs + \
+            a_extra_ffargs + \
+            [_quote(args.outfile)]
     #
     if args.mode == "script_bash":
         print("""\
@@ -220,17 +235,13 @@ ffmpeg -y \\
   {} \\
   -filter_complex "
 {}
-" {} \\
-  {}
-""".format(" ".join(ifile_args),
+" {}""".format(" ".join(ifile_args),
            fc,
-           " ".join(extra_ffargs),
            " ".join(map_args)))
     else:
         cmd = ["ffmpeg", "-y"]
         cmd.extend(ifile_args)
         cmd.extend(["-filter_complex", fc])
-        cmd.extend(extra_ffargs)
         cmd.extend(map_args)
 
         check_call(cmd)

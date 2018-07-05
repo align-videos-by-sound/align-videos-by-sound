@@ -21,6 +21,7 @@ __all__ = [
     "get_media_info",
     "media_to_mono_wave",
     "duration_to_hhmmss",
+    "parse_time",
     ]
 
 _logger = logging.getLogger(__name__)
@@ -92,6 +93,49 @@ def check_stderroutput(*popenargs, **kwargs):
         raise subprocess.CalledProcessError(
             retcode, list(cmd), output=stderr_output)
     return stderr_output
+
+
+def duration_to_hhmmss(duration):
+    ss_h = duration // 3600
+    ss_m = duration // 60
+    ss_s = duration % 60
+    return "%02d:%02d:%02d.%s" % (
+        ss_h, ss_m, ss_s, ("%.3f" % duration).split(".")[1])
+
+
+def parse_time(s):
+    """
+    >>> print("%.3f" % parse_time(3.2))
+    3.200
+    >>> print("%.3f" % parse_time(3))
+    3.000
+    >>> print("%.3f" % parse_time("00:00:01"))
+    1.000
+    >>> print("%.3f" % parse_time("00:00:01.3"))
+    1.300
+    >>> print("%.3f" % parse_time("00:00:01.34"))
+    1.340
+    >>> print("%.3f" % parse_time("00:00:01.345"))
+    1.345
+    >>> print("%.3f" % parse_time("00:01:01.345"))
+    61.345
+    >>> print("%.3f" % parse_time("02:01:01.345"))
+    7261.345
+    """
+    try:
+        return float(s)
+    except ValueError:
+        rgx = r"(\d+):([0-5]\d):([0-5]\d)(\.\d+)?"
+        m = re.match(rgx, s)
+        if not m:
+            raise ValueError("'{}' is not valid time.".format(s))
+        hms = list(map(int, m.group(1, 2, 3)))
+        ss = m.group(4)
+        ss = ss[1:] if ss else "0"
+
+        result = hms[0] * 60 * 60 + hms[1] * 60 + hms[2]
+        result += int(ss) / (10**len(ss))
+        return result
 
 
 # ##################################
@@ -188,14 +232,12 @@ def _parse_ffprobe_output(inputstr):
         
     result = {"streams": []}
     lines = inputstr.split("\n")
-    rgx = r"Duration: (\d{2}):(\d{2}):(\d{2}).(\d{2})"
+    rgx = r"Duration: (\d+:\d{2}:\d{2}\.\d+)"
     while lines:
         line = lines.pop(0)
         m = re.search(rgx, line)
         if m:
-            tp = list(map(int, m.group(1, 2, 3, 4)))
-            result["duration"] = \
-                tp[0] * 60 * 60 + tp[1] * 60 + tp[2] + tp[3] / 100.
+            result["duration"] = parse_time(m.group(1))
             break
     #
     rgx = r"Stream #(\d+):(\d+)(?:\(\w+\))?: ([^:]+): (.*)$"
@@ -241,14 +283,6 @@ def get_media_info(filename):
 
     err = check_stderroutput(["ffprobe", "-hide_banner", filename])
     return _parse_ffprobe_output(err.decode("utf-8"))
-
-
-def duration_to_hhmmss(duration):
-    ss_h = duration // 3600
-    ss_m = duration // 60
-    ss_s = duration % 60
-    return "%02d:%02d:%02d.%s" % (
-        ss_h, ss_m, ss_s, ("%.3f" % duration).split(".")[1])
 
 
 def media_to_mono_wave(
