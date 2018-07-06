@@ -20,7 +20,9 @@ _logger = logging.getLogger(__name__)
 
 if hasattr("", "decode"):  # python 2
     def _decode(s):
-        return s.decode(sys.stdout.encoding)
+        if isinstance(s, (str,)):  # bytes in python 2
+            return s.decode(sys.stdout.encoding)
+        return s
 else:
     def _decode(s):
         return s
