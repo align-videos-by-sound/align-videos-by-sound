@@ -71,7 +71,7 @@ class _StackVideosFilterGraphBuilder(object):
                         i * self._shape[0]:(i + 1) * self._shape[0]])
                 fhstack.add_filter(
                     "hstack",
-                    inputs="%d" % inputs,
+                    inputs=inputs,
                     shortest="1")
                 olab = "[{}v]".format("%d" % (i + 1) if self._shape[1] > 1 else "")
                 fhstack.ov.append(olab)
@@ -84,7 +84,7 @@ class _StackVideosFilterGraphBuilder(object):
         if self._shape[1] > 1:
             # vstack
             fvstack.add_filter(
-                "vstack", inputs="%d" % self._shape[1], shortest="1")
+                "vstack", inputs=self._shape[1], shortest="1")
             fvstack.ov.append("[v]")
             result.append(fvstack.to_str())
 

@@ -34,13 +34,15 @@ def mk_single_filter_body(name, *args, **kwargs):
     color=c=black:d=123.45:s=960x540
     >>> print(mk_single_filter_body("scale", "600", "400"))
     scale=600:400
+    >>> print(mk_single_filter_body("scale", 600, 400))
+    scale=600:400
     >>> print(mk_single_filter_body("concat"))
     concat
     """
     paras = _filter_defaults.get(name, {})
     paras.update(**kwargs)
 
-    all_args = list(args)  # positional
+    all_args = list(map(lambda a: "%s" % a, args))  # positional
     all_args += [
         "{}={}".format(k, paras[k])
         for k in sorted(paras.keys())]
@@ -116,7 +118,7 @@ class ConcatWithGapFilterGraphBuilder(object):
             olab = "[gap{{gapno}}a_c{i}_{ident}]".format(ident=ident, i=i)
             fpada[i].oa.append(olab)
             fpada[-1].iv.append(olab)
-        fpada[-1].add_filter("amerge", "%d" % len(fpada[-1].iv))
+        fpada[-1].add_filter("amerge", len(fpada[-1].iv))
         fpada[-1].oa.append("[gap{{gapno}}a{ident}]".format(ident=ident))
         self._tmpl_gapa = (
             ";\n".join([fpada[i].to_str()
@@ -126,7 +128,7 @@ class ConcatWithGapFilterGraphBuilder(object):
         # filter to original video stream
         fbodyv = Filter()
         fbodyv.iv.append("[{stream_no}:v]")
-        fbodyv.add_filter("{v_filter_extra}scale", "%d" % w, "%d" % h)
+        fbodyv.add_filter("{v_filter_extra}scale", w, h)
         fbodyv.add_filter("setsar", "1")
         fbodyv.ov.append("[v%s_{bodyident}]" % ident)
         self._bodyv = (fbodyv.to_str(), "".join(fbodyv.ov))
@@ -135,7 +137,7 @@ class ConcatWithGapFilterGraphBuilder(object):
         fbodya = Filter()
         fbodya.ia.append("[{stream_no}:a]")
         fbodya.add_filter(
-            "{a_filter_extra}aresample", "%d" % sample_rate)
+            "{a_filter_extra}aresample", sample_rate)
         fbodya.oa.append("[a%s_{bodyident}]" % ident)
         self._bodya = (fbodya.to_str(), "".join(fbodya.oa))
 
@@ -195,7 +197,7 @@ class ConcatWithGapFilterGraphBuilder(object):
             raise Exception("You haven't prepared to call this method.")
         self._fconcat.add_filter(
             "concat",
-            n="%d" % max(niv, nia),
+            n=max(niv, nia),
             v="1" if niv > 1 else "0",
             a="1" if nia > 1 else "0")
         if niv > 1:
