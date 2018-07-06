@@ -89,6 +89,10 @@ class Filter(object):
         self._filters.append(
             mk_single_filter_body(name, *args, **kwargs))
 
+    def insert_filter(self, i, name, *args, **kwargs):
+        self._filters.insert(
+            i, mk_single_filter_body(name, *args, **kwargs))
+
     def to_str(self):
         ilabs = self._labels_to_str(self.iv, self.ia)
         filterbody = ",".join(self._filters)
