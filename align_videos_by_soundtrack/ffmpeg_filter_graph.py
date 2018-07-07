@@ -7,6 +7,7 @@ from __future__ import unicode_literals
 from __future__ import absolute_import
 
 from itertools import chain
+from collections import defaultdict
 import logging
 
 __all__ = [
@@ -53,6 +54,9 @@ def mk_single_filter_body(name, *args, **kwargs):
         ":".join(all_args))
 
 
+_olab_counter = defaultdict(int)
+
+
 class Filter(object):
     """
     >>> f = Filter()
@@ -70,6 +74,22 @@ class Filter(object):
     >>> f.ov.append("[vc0]")
     >>> print(f.to_str())
     [0:v][1:v]concat[vc0]
+    >>> #
+    >>> f = Filter()
+    >>> f.iv.append("[0:v]")
+    >>> f.iv.append("[1:v]")
+    >>> f.add_filter("concat")
+    >>> f.append_outlabel_v()
+    >>> print(f.to_str())
+    [0:v][1:v]concat[v1]
+    >>> #
+    >>> f = Filter()
+    >>> f.ia.append("[0:a]")
+    >>> f.ia.append("[1:a]")
+    >>> f.add_filter("concat")
+    >>> f.append_outlabel_a()
+    >>> print(f.to_str())
+    [0:a][1:a]concat[a1]
     """
     def __init__(self):
         self.iv = []  # the labels of input video streams
@@ -92,6 +112,18 @@ class Filter(object):
     def insert_filter(self, i, name, *args, **kwargs):
         self._filters.insert(
             i, mk_single_filter_body(name, *args, **kwargs))
+
+    def append_outlabel_v(self, templ="[v%(counter)d]"):
+        global _olab_counter
+        _olab_counter[templ] += 1
+        self.ov.append(templ % dict(
+                counter=_olab_counter[templ]))
+
+    def append_outlabel_a(self, templ="[a%(counter)d]"):
+        global _olab_counter
+        _olab_counter[templ] += 1
+        self.oa.append(templ % dict(
+                counter=_olab_counter[templ]))
 
     def to_str(self):
         ilabs = self._labels_to_str(self.iv, self.ia)
