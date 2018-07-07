@@ -210,7 +210,8 @@ class SyncDetector(object):
         trim_pre = -(pad_pre - pad_pre.max())
         infos = [self._get_media_info(fn) for fn in files]
         orig_dur = np.array([inf["duration"] for inf in infos])
-        strms_info = [inf["streams"] for inf in infos]
+        strms_info = [
+            (inf["streams"], inf["streams_summary"]) for inf in infos]
         pad_post = list(
             (pad_pre + orig_dur).max() - (pad_pre + orig_dur))
         trim_post = list(
@@ -241,7 +242,6 @@ class SyncDetector(object):
             self._sample_rate, files, fft_bin_size, overlap, box_height, box_width, samples_per_box,
             max_misalignment, known_delay_ge_map)
 
-        #
         return [
             [
                 files[i],
@@ -251,7 +251,8 @@ class SyncDetector(object):
                     "orig_duration": orig_dur[i],
                     "trim_post": trim_post[i],
                     "pad_post": pad_post[i],
-                    "orig_streams": strms_info[i],
+                    "orig_streams": strms_info[i][0],
+                    "orig_streams_summary": strms_info[i][1],
                     }
                 ]
             for i in range(len(files))]
@@ -269,12 +270,12 @@ def main(args=sys.argv):
     parser = argparse.ArgumentParser(prog=args[0], usage=_doc_template)
     parser.add_argument(
         '--max_misalignment',
-        type=float, default=10*60,
+        type=str, default="600",
         help='When handling media files with long playback time, \
 it may take a huge amount of time and huge memory. \
 In such a case, by changing this value to a small value, \
 it is possible to indicate the scanning range of the media file to the program. \
-(default: %(default)d)')
+(default: %(default)s)')
     parser.add_argument(
         '--known_delay_ge_map',
         type=str,
@@ -325,12 +326,8 @@ It is possible to pass any media that ffmpeg can handle.',)
         stream=sys.stderr,
         format="%(created)f|%(levelname)5s:%(module)s#%(funcName)s:%(message)s")
 
-    file_specs = []
-    if args.file_names and len(args.file_names) >= 2:
-        file_specs = check_and_decode_filenames(args.file_names)
-        # _logger.debug(file_specs)
-    else:  # No pipe and no input file, print help text and exit
-        _bailout(parser)
+    file_specs = check_and_decode_filenames(
+        args.file_names, min_num_files=2)
     if not file_specs:
         _bailout(parser)
 
@@ -339,7 +336,7 @@ It is possible to pass any media that ffmpeg can handle.',)
         dont_cache=args.dont_cache) as det:
         result = det.align(
             file_specs,
-            max_misalignment=args.max_misalignment,
+            max_misalignment=communicate.parse_time(args.max_misalignment),
             known_delay_ge_map=known_delay_ge_map)
     if args.json:
         print(json.dumps({'edit_list': result}, indent=4))

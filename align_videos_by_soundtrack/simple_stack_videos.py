@@ -21,7 +21,7 @@ from itertools import chain
 import numpy as np
 
 from .align import SyncDetector
-from .communicate import check_call
+from .communicate import parse_time, call_ffmpeg_with_filtercomplex
 from .ffmpeg_filter_graph import Filter, ConcatWithGapFilterGraphBuilder
 from .utils import check_and_decode_filenames
 from . import _cache
@@ -71,7 +71,7 @@ class _StackVideosFilterGraphBuilder(object):
                         i * self._shape[0]:(i + 1) * self._shape[0]])
                 fhstack.add_filter(
                     "hstack",
-                    inputs="%d" % inputs,
+                    inputs=inputs,
                     shortest="1")
                 olab = "[{}v]".format("%d" % (i + 1) if self._shape[1] > 1 else "")
                 fhstack.ov.append(olab)
@@ -84,7 +84,7 @@ class _StackVideosFilterGraphBuilder(object):
         if self._shape[1] > 1:
             # vstack
             fvstack.add_filter(
-                "vstack", inputs="%d" % self._shape[1], shortest="1")
+                "vstack", inputs=self._shape[1], shortest="1")
             fvstack.ov.append("[v]")
             result.append(fvstack.to_str())
 
@@ -123,10 +123,9 @@ pan=stereo|\\
 
 def _build(args):
     shape = json.loads(args.shape) if args.shape else (2, 2)
-    files = check_and_decode_filenames(args.files)
-    if not files:
-        sys.exit(1)
-
+    files = check_and_decode_filenames(
+        args.files,
+        min_num_files=2, exit_if_error=True)
     if len(files) < shape[0] * shape[1]:
         files = files + [files[i % len(files)]
                          for i in range(shape[0] * shape[1] - len(files))]
@@ -139,7 +138,7 @@ def _build(args):
     b = _StackVideosFilterGraphBuilder(
         shape=shape, w=args.w, h=args.h, sample_rate=args.sample_rate)
     with SyncDetector(dont_cache=args.dont_cache) as det:
-        for i, inf in enumerate(det.align(files, max_misalignment=args.max_misalignment)):
+        for i, inf in enumerate(det.align(files, max_misalignment=parse_time(args.max_misalignment))):
             pre, post = inf[1]["pad"], inf[1]["pad_post"]
             if not (pre > 0 and post > 0):
                 # FIXME:
@@ -232,9 +231,9 @@ If the key is blank, it means all input streams. Only single input / single outp
 filters can be used.""")
     #####
     parser.add_argument(
-        '--max_misalignment', type=float, default=10*60,
+        '--max_misalignment', type=str, default="600",
         help="""\
-See the help of alignment_info_by_sound_track. (default: %(default)d)""")
+See the help of alignment_info_by_sound_track. (default: %(default)s)""")
     parser.add_argument(
         '--shape', type=str, default="[2, 2]",
         help="The shape of the tile, like '[2, 2]'. (default: %(default)s)")
@@ -247,9 +246,20 @@ See the help of alignment_info_by_sound_track. (default: %(default)d)""")
     parser.add_argument(
         '--height-per-cell', dest="h", type=int, default=540,
         help="Height of the cell. (default: %(default)d)")
-    extra_ffargs = [
-        "-color_primaries", "bt709", "-color_trc", "bt709", "-colorspace", "bt709"
-        ]
+    #####
+    parser.add_argument(
+        '--v_extra_ffargs', type=str,
+        default=json.dumps(["-color_primaries", "bt709", "-color_trc", "bt709", "-colorspace", "bt709"]),
+        help="""\
+Additional arguments to ffmpeg for output video streams. Pass list in JSON format. \
+(default: '%(default)s')""")
+    parser.add_argument(
+        '--a_extra_ffargs', type=str,
+        default=json.dumps([]),
+        help="""\
+Additional arguments to ffmpeg for output audio streams. Pass list in JSON format. \
+(default: '%(default)s')""")
+    #####
     parser.add_argument(
         '--dont_cache',
         action="store_true",
@@ -263,49 +273,23 @@ If you hate this behaviour, specify this option.''' % (
         stream=sys.stderr,
         format="%(created)f|%(levelname)5s:%(module)s#%(funcName)s:%(message)s")
     
-    files, fc, maps = _build(args)
-    def _quote(s):
-        if args.mode == "script_bash":
-            import pipes
-            return pipes.quote(s)
-        return s
-
-    ifile_args = list(chain.from_iterable(
-            [('-i', _quote(f)) for f in files]))
+    files, fc, (vmap, amap) = _build(args)
+    v_extra_ffargs = json.loads(args.v_extra_ffargs) if vmap else []
+    a_extra_ffargs = json.loads(args.a_extra_ffargs) if amap else []
     if args.video_mode == 'indivisual' or args.audio_mode == 'indivisual':
         outbase, outext = os.path.splitext(args.outfile)
-        outfiles = [_quote("{}_{:02d}{}".format(outbase, i, outext))
-                    for i in range(len(maps[0]))]
-        map_args = list(chain.from_iterable(
-                [("-map", _quote(mv), "-map", _quote(ma), _quote(fn))
-                 for mv, ma, fn in zip(maps[0], maps[1], outfiles)]))
+        outfiles = ["{}_{:02d}{}".format(outbase, i, outext)
+                    for i in range(len(vmap))]
     else:
-        map_args = list(chain.from_iterable(
-                [("-map", _quote(m))
-                 for m in maps[0] + maps[1]])) + [_quote(args.outfile)]
+        outfiles = [args.outfile]
 
-    if args.mode == "script_bash":
-        print("""\
-#! /bin/sh
-
-ffmpeg -y \\
-  {} \\
-  -filter_complex "
-{}
-" {} \\
-  {}
-""".format(" ".join(ifile_args),
-           fc,
-           " ".join(extra_ffargs),
-           " ".join(map_args)))
-    else:
-        cmd = ["ffmpeg", "-y"]
-        cmd.extend(ifile_args)
-        cmd.extend(["-filter_complex", fc])
-        cmd.extend(extra_ffargs)
-        cmd.extend(map_args)
-
-        check_call(cmd)
+    call_ffmpeg_with_filtercomplex(
+        args.mode,
+        files,
+        fc,
+        v_extra_ffargs + a_extra_ffargs,
+        zip(vmap, amap),
+        outfiles)
 
 
 #

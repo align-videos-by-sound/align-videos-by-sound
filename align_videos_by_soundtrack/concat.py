@@ -19,7 +19,7 @@ from itertools import chain
 import numpy as np
 
 from .align import SyncDetector
-from .communicate import check_call
+from .communicate import call_ffmpeg_with_filtercomplex
 from .ffmpeg_filter_graph import (
     Filter,
     ConcatWithGapFilterGraphBuilder,
@@ -32,14 +32,10 @@ _logger = logging.getLogger(__name__)
 
 
 def _build(args):
-    chk = check_and_decode_filenames([args.base])
-    if not chk:
-        sys.exit(1)
-    base = chk[0]
-
-    targets = check_and_decode_filenames(args.splitted)
-    if not targets:
-        sys.exit(1)
+    base = check_and_decode_filenames(
+        [args.base], exit_if_error=True)[0]
+    targets = check_and_decode_filenames(
+        args.splitted, min_num_files=2, exit_if_error=True)
 
     a_filter_extra = json.loads(args.a_filter_extra) if args.a_filter_extra else {}
     v_filter_extra = json.loads(args.v_filter_extra) if args.v_filter_extra else {}
@@ -69,14 +65,11 @@ def _build(args):
     has_video = []
     for i in range(len(einf)):
         # detect resolution, etc.
-        ostrms = einf[i]["orig_streams"]
-        has_video.append(any([st["type"] == "Video" for st in ostrms]))
-        for st in ostrms:
-            if "resolution" in st:
-                new_w, new_h = st["resolution"][0]
-                width, height = max(width, new_w), max(height, new_h)
-            elif "sample_rate" in st:
-                sample_rate = max(sample_rate, st["sample_rate"])
+        summary = einf[i]["orig_streams_summary"]
+        has_video.append(summary["num_video_streams"] > 0)
+        width = max(width, summary["max_resol_width"])
+        height = max(height, summary["max_resol_height"])
+        sample_rate = max(sample_rate, summary["max_sample_rate"])
 
     targets_have_video = any(has_video[1:])
     bld = ConcatWithGapFilterGraphBuilder("c", w=width, h=height, sample_rate=sample_rate)
@@ -112,7 +105,7 @@ def _build(args):
                 bld.add_video_gap(einf[i + 1]["orig_duration"])
         bld.add_audio_content(i + 1, af(i + 1))
     fc, vmap, amap = bld.build()
-    return [base] + targets, fc, vmap, amap
+    return [base] + targets, fc, [vmap], [amap]
 
 
 def main(args=sys.argv):
@@ -182,6 +175,19 @@ The default is "do not align" (`omit`) because it is not normally suitable for t
 purpose of `concatanate`.""")
     #####
     parser.add_argument(
+        '--v_extra_ffargs', type=str,
+        default=json.dumps(["-color_primaries", "bt709", "-color_trc", "bt709", "-colorspace", "bt709"]),
+        help="""\
+Additional arguments to ffmpeg for output video streams. Pass list in JSON format. \
+(default: '%(default)s')""")
+    parser.add_argument(
+        '--a_extra_ffargs', type=str,
+        default=json.dumps([]),
+        help="""\
+Additional arguments to ffmpeg for output audio streams. Pass list in JSON format. \
+(default: '%(default)s')""")
+    #####
+    parser.add_argument(
         '--dont_cache',
         action="store_true",
         help='''Normally, this script stores the result in cache ("%s"). \
@@ -189,51 +195,22 @@ If you hate this behaviour, specify this option.''' % (
             _cache.cache_root_dir))
     #####
     args = parser.parse_args(args[1:])
-    if len(args.splitted) < 2:
-        parser.print_usage()
-        sys.exit(1)
     logging.basicConfig(
         level=logging.DEBUG,
         stream=sys.stderr,
         format="%(created)f|%(levelname)5s:%(module)s#%(funcName)s:%(message)s")
 
     files, fc, vmap, amap = _build(args)
-    extra_ffargs = [
-        "-color_primaries", "bt709", "-color_trc", "bt709", "-colorspace", "bt709"
-        ] if vmap else []
-    maps = filter(None, [vmap, amap])
-    def _quote(s):
-        if args.mode == "script_bash":
-            import pipes
-            return pipes.quote(s)
-        return s
-    ifile_args = list(chain.from_iterable(
-            [('-i', _quote(f)) for f in files]))
-    map_args = list(chain.from_iterable(
-            [("-map", _quote(m)) for m in maps])) + [_quote(args.outfile)]
-    #
-    if args.mode == "script_bash":
-        print("""\
-#! /bin/sh
+    v_extra_ffargs = json.loads(args.v_extra_ffargs) if vmap else []
+    a_extra_ffargs = json.loads(args.a_extra_ffargs) if amap else []
+    call_ffmpeg_with_filtercomplex(
+        args.mode,
+        files,
+        fc,
+        v_extra_ffargs + a_extra_ffargs,
+        zip(vmap, amap),
+        [args.outfile])
 
-ffmpeg -y \\
-  {} \\
-  -filter_complex "
-{}
-" {} \\
-  {}
-""".format(" ".join(ifile_args),
-           fc,
-           " ".join(extra_ffargs),
-           " ".join(map_args)))
-    else:
-        cmd = ["ffmpeg", "-y"]
-        cmd.extend(ifile_args)
-        cmd.extend(["-filter_complex", fc])
-        cmd.extend(extra_ffargs)
-        cmd.extend(map_args)
-
-        check_call(cmd)
 
 #
 if __name__ == '__main__':

@@ -7,6 +7,7 @@ from __future__ import unicode_literals
 from __future__ import absolute_import
 
 from itertools import chain
+from collections import defaultdict
 import logging
 
 __all__ = [
@@ -34,13 +35,15 @@ def mk_single_filter_body(name, *args, **kwargs):
     color=c=black:d=123.45:s=960x540
     >>> print(mk_single_filter_body("scale", "600", "400"))
     scale=600:400
+    >>> print(mk_single_filter_body("scale", 600, 400))
+    scale=600:400
     >>> print(mk_single_filter_body("concat"))
     concat
     """
     paras = _filter_defaults.get(name, {})
     paras.update(**kwargs)
 
-    all_args = list(args)  # positional
+    all_args = list(map(lambda a: "%s" % a, args))  # positional
     all_args += [
         "{}={}".format(k, paras[k])
         for k in sorted(paras.keys())]
@@ -49,6 +52,9 @@ def mk_single_filter_body(name, *args, **kwargs):
         name,
         "=" if all_args else "",
         ":".join(all_args))
+
+
+_olab_counter = defaultdict(int)
 
 
 class Filter(object):
@@ -68,6 +74,22 @@ class Filter(object):
     >>> f.ov.append("[vc0]")
     >>> print(f.to_str())
     [0:v][1:v]concat[vc0]
+    >>> #
+    >>> f = Filter()
+    >>> f.iv.append("[0:v]")
+    >>> f.iv.append("[1:v]")
+    >>> f.add_filter("concat")
+    >>> f.append_outlabel_v()
+    >>> print(f.to_str())
+    [0:v][1:v]concat[v1]
+    >>> #
+    >>> f = Filter()
+    >>> f.ia.append("[0:a]")
+    >>> f.ia.append("[1:a]")
+    >>> f.add_filter("concat")
+    >>> f.append_outlabel_a()
+    >>> print(f.to_str())
+    [0:a][1:a]concat[a1]
     """
     def __init__(self):
         self.iv = []  # the labels of input video streams
@@ -86,6 +108,22 @@ class Filter(object):
     def add_filter(self, name, *args, **kwargs):
         self._filters.append(
             mk_single_filter_body(name, *args, **kwargs))
+
+    def insert_filter(self, i, name, *args, **kwargs):
+        self._filters.insert(
+            i, mk_single_filter_body(name, *args, **kwargs))
+
+    def append_outlabel_v(self, templ="[v%(counter)d]"):
+        global _olab_counter
+        _olab_counter[templ] += 1
+        self.ov.append(templ % dict(
+                counter=_olab_counter[templ]))
+
+    def append_outlabel_a(self, templ="[a%(counter)d]"):
+        global _olab_counter
+        _olab_counter[templ] += 1
+        self.oa.append(templ % dict(
+                counter=_olab_counter[templ]))
 
     def to_str(self):
         ilabs = self._labels_to_str(self.iv, self.ia)
@@ -116,7 +154,7 @@ class ConcatWithGapFilterGraphBuilder(object):
             olab = "[gap{{gapno}}a_c{i}_{ident}]".format(ident=ident, i=i)
             fpada[i].oa.append(olab)
             fpada[-1].iv.append(olab)
-        fpada[-1].add_filter("amerge", "%d" % len(fpada[-1].iv))
+        fpada[-1].add_filter("amerge", len(fpada[-1].iv))
         fpada[-1].oa.append("[gap{{gapno}}a{ident}]".format(ident=ident))
         self._tmpl_gapa = (
             ";\n".join([fpada[i].to_str()
@@ -126,7 +164,7 @@ class ConcatWithGapFilterGraphBuilder(object):
         # filter to original video stream
         fbodyv = Filter()
         fbodyv.iv.append("[{stream_no}:v]")
-        fbodyv.add_filter("{v_filter_extra}scale", "%d" % w, "%d" % h)
+        fbodyv.add_filter("{v_filter_extra}scale", w, h)
         fbodyv.add_filter("setsar", "1")
         fbodyv.ov.append("[v%s_{bodyident}]" % ident)
         self._bodyv = (fbodyv.to_str(), "".join(fbodyv.ov))
@@ -135,7 +173,7 @@ class ConcatWithGapFilterGraphBuilder(object):
         fbodya = Filter()
         fbodya.ia.append("[{stream_no}:a]")
         fbodya.add_filter(
-            "{a_filter_extra}aresample", "%d" % sample_rate)
+            "{a_filter_extra}aresample", sample_rate)
         fbodya.oa.append("[a%s_{bodyident}]" % ident)
         self._bodya = (fbodya.to_str(), "".join(fbodya.oa))
 
@@ -195,7 +233,7 @@ class ConcatWithGapFilterGraphBuilder(object):
             raise Exception("You haven't prepared to call this method.")
         self._fconcat.add_filter(
             "concat",
-            n="%d" % max(niv, nia),
+            n=max(niv, nia),
             v="1" if niv > 1 else "0",
             a="1" if nia > 1 else "0")
         if niv > 1:
