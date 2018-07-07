@@ -210,7 +210,8 @@ class SyncDetector(object):
         trim_pre = -(pad_pre - pad_pre.max())
         infos = [self._get_media_info(fn) for fn in files]
         orig_dur = np.array([inf["duration"] for inf in infos])
-        strms_info = [inf["streams"] for inf in infos]
+        strms_info = [
+            (inf["streams"], inf["streams_summary"]) for inf in infos]
         pad_post = list(
             (pad_pre + orig_dur).max() - (pad_pre + orig_dur))
         trim_post = list(
@@ -241,7 +242,6 @@ class SyncDetector(object):
             self._sample_rate, files, fft_bin_size, overlap, box_height, box_width, samples_per_box,
             max_misalignment, known_delay_ge_map)
 
-        #
         return [
             [
                 files[i],
@@ -251,7 +251,8 @@ class SyncDetector(object):
                     "orig_duration": orig_dur[i],
                     "trim_post": trim_post[i],
                     "pad_post": pad_post[i],
-                    "orig_streams": strms_info[i],
+                    "orig_streams": strms_info[i][0],
+                    "orig_streams_summary": strms_info[i][1],
                     }
                 ]
             for i in range(len(files))]

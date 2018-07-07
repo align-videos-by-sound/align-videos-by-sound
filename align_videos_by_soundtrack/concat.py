@@ -65,14 +65,11 @@ def _build(args):
     has_video = []
     for i in range(len(einf)):
         # detect resolution, etc.
-        ostrms = einf[i]["orig_streams"]
-        has_video.append(any([st["type"] == "Video" for st in ostrms]))
-        for st in ostrms:
-            if "resolution" in st:
-                new_w, new_h = st["resolution"][0]
-                width, height = max(width, new_w), max(height, new_h)
-            elif "sample_rate" in st:
-                sample_rate = max(sample_rate, st["sample_rate"])
+        summary = einf[i]["orig_streams_summary"]
+        has_video.append(summary["num_video_streams"] > 0)
+        width = max(width, summary["max_resol_width"])
+        height = max(height, summary["max_resol_height"])
+        sample_rate = max(sample_rate, summary["max_sample_rate"])
 
     targets_have_video = any(has_video[1:])
     bld = ConcatWithGapFilterGraphBuilder("c", w=width, h=height, sample_rate=sample_rate)

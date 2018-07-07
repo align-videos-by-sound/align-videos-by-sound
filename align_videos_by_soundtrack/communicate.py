@@ -272,6 +272,71 @@ def _parse_ffprobe_output(inputstr):
     return result
 
 
+def _summarize_streams(streams):
+    r"""
+    >>> import json
+    >>> s = '''Input #0, mov,mp4,m4a,3gp,3g2,mj2, from 'input.mp4':
+    ...  Metadata:
+    ...    major_brand     : isom
+    ...    minor_version   : 512
+    ...    compatible_brands: isomiso2avc1mp41
+    ...    encoder         : Lavf56.40.101
+    ...  Duration: 00:24:59.55, start: 0.000000, bitrate: 4457 kb/s
+    ...    Stream #0:0(und): Video: h264 (High) (avc1 / 0x31637661), yuv420p(tv, bt709), 1920x1080 [SAR 1:1 DAR 16:9], 4324 kb/s, 29.97 fps, 29.97 tbr, 90k tbn, 59.94 tbc (default)
+    ...    Metadata:
+    ...      handler_name    : VideoHandler
+    ...    Stream #0:1(und): Audio: aac (LC) (mp4a / 0x6134706D), 44100 Hz, stereo, fltp, 125 kb/s (default)
+    ...    Metadata:
+    ...      handler_name    : SoundHandler'''
+    >>> result = _summarize_streams(_parse_ffprobe_output(s)["streams"])
+    >>> print(json.dumps(result, indent=2, sort_keys=True).replace(', \n', ',\n'))
+    {
+      "max_resol_height": 1080,
+      "max_resol_width": 1920,
+      "max_sample_rate": 44100,
+      "num_audio_streams": 1,
+      "num_video_streams": 1
+    }
+    >>> s = '''Input #0, wav, from '1.wav':
+    ...  Metadata:
+    ...    encoder         : Lavf57.71.100
+    ...  Duration: 00:05:19.51, bitrate: 1411 kb/s
+    ...    Stream #0:0: Audio: pcm_s16le ([1][0][0][0] / 0x0001), 44100 Hz, 2 channels, s16, 1411 kb/s'''
+    >>> result = _summarize_streams(_parse_ffprobe_output(s)["streams"])
+    >>> print(json.dumps(result, indent=2, sort_keys=True).replace(', \n', ',\n'))
+    {
+      "max_resol_height": 0,
+      "max_resol_width": 0,
+      "max_sample_rate": 44100,
+      "num_audio_streams": 1,
+      "num_video_streams": 0
+    }
+    """
+    result = dict(
+        max_resol_width=0,
+        max_resol_height=0,
+        max_sample_rate=0,
+        num_video_streams=0,
+        num_audio_streams=0)
+
+    result["num_video_streams"] = sum(
+        [st["type"] == "Video" for st in streams])
+    result["num_audio_streams"] = sum(
+        [st["type"] == "Audio" for st in streams])
+    for st in streams:
+        if "resolution" in st:
+            new_w, new_h = st["resolution"][0]
+            result["max_resol_width"] = max(
+                result["max_resol_width"], new_w)
+            result["max_resol_height"] = max(
+                result["max_resol_height"], new_h)
+        elif "sample_rate" in st:
+            result["max_sample_rate"] = max(
+                result["max_sample_rate"], st["sample_rate"])
+
+    return result
+
+
 def get_media_info(filename):
     """
     return the information extracted by ffprobe.
@@ -282,7 +347,9 @@ def get_media_info(filename):
     os.path.getatime(filename)
 
     err = check_stderroutput(["ffprobe", "-hide_banner", filename])
-    return _parse_ffprobe_output(err.decode("utf-8"))
+    result = _parse_ffprobe_output(err.decode("utf-8"))
+    result["streams_summary"] = _summarize_streams(result["streams"])
+    return result
 
 
 def media_to_mono_wave(
