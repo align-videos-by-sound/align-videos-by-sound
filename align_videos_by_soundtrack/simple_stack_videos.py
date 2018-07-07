@@ -21,7 +21,7 @@ from itertools import chain
 import numpy as np
 
 from .align import SyncDetector
-from .communicate import check_call, parse_time, pipes_quote
+from .communicate import parse_time, call_ffmpeg_with_filtercomplex
 from .ffmpeg_filter_graph import Filter, ConcatWithGapFilterGraphBuilder
 from .utils import check_and_decode_filenames
 from . import _cache
@@ -274,43 +274,22 @@ If you hate this behaviour, specify this option.''' % (
         format="%(created)f|%(levelname)5s:%(module)s#%(funcName)s:%(message)s")
     
     files, fc, (vmap, amap) = _build(args)
-    ifile_args = chain.from_iterable([('-i', f) for f in files])
     v_extra_ffargs = json.loads(args.v_extra_ffargs) if vmap else []
     a_extra_ffargs = json.loads(args.a_extra_ffargs) if amap else []
     if args.video_mode == 'indivisual' or args.audio_mode == 'indivisual':
         outbase, outext = os.path.splitext(args.outfile)
         outfiles = ["{}_{:02d}{}".format(outbase, i, outext)
                     for i in range(len(vmap))]
-        map_args = list(chain.from_iterable(
-                [["-map", mv, "-map", ma] + \
-                     v_extra_ffargs + a_extra_ffargs + [fn]
-                 for mv, ma, fn in zip(vmap, amap, outfiles)]))
     else:
-        map_args = list(chain.from_iterable(
-                [("-map", m)
-                 for m in vmap + amap])) + \
-                 v_extra_ffargs + a_extra_ffargs + [args.outfile]
+        outfiles = [args.outfile]
 
-    if args.mode == "script_bash":
-        _quote = pipes_quote()
-        print("""\
-#! /bin/sh
-
-ffmpeg -y \\
-  {} \\
-  -filter_complex "
-{}
-" {}
-""".format(" ".join(_quote.map(ifile_args)),
-           fc,
-           " ".join(_quote.map(map_args))))
-    else:
-        cmd = ["ffmpeg", "-y"]
-        cmd.extend(ifile_args)
-        cmd.extend(["-filter_complex", fc])
-        cmd.extend(map_args)
-
-        check_call(cmd)
+    call_ffmpeg_with_filtercomplex(
+        args.mode,
+        files,
+        fc,
+        v_extra_ffargs + a_extra_ffargs,
+        zip(vmap, amap),
+        outfiles)
 
 
 #

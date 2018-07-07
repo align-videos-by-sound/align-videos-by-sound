@@ -12,6 +12,7 @@ import sys
 import os
 import re
 import logging
+from itertools import chain
 
 import scipy.io.wavfile
 
@@ -411,6 +412,58 @@ def media_to_mono_wave(
         #_logger.debug(cmd)
         check_call(cmd, stderr=open(os.devnull, 'w'))
     return output
+
+
+def call_ffmpeg_with_filtercomplex(
+    mode,
+    inputfiles,
+    filter_complex,
+    extra_ffargs,
+    maps,  # [("[v0]", "[a0]"), ("[v1]", "[a1]"), ("[v2]", "[a2]"), ...]
+    outfiles):
+    """
+    Call ffmpeg or print a `bash` script.
+
+    Calling ffmpeg is complicated, such as extremely delicate argument order,
+    or there are also too flexible aliases, and enormous variation calling
+    is possible if including up to deprecated options. but if it is called
+    only by `-filter_complex` and` -map`, it is almost the same way of calling it.
+    """
+    ifile_args = chain.from_iterable([('-i', f) for f in inputfiles])
+    if len(outfiles) > 1:
+        map_args = []
+        for zi in zip(maps, outfiles):
+            map_args.extend(chain.from_iterable([("-map", m) for m in zi[0] if m]))
+            map_args.extend(extra_ffargs)
+            map_args.append(zi[1])
+    else:
+        map_args = []
+        for mi in maps:
+            map_args.extend(chain.from_iterable([("-map", m) for m in mi if m]))
+        map_args.extend(extra_ffargs)
+        map_args.append(outfiles[0])
+    #
+    if mode == "script_bash":
+        _quote = pipes_quote()
+        print("""\
+#! /bin/sh
+# -*- coding: utf-8 -*-
+
+ffmpeg -y \\
+  {} \\
+  -filter_complex "
+{}
+" {}
+""".format(" ".join(_quote.map(ifile_args)),
+           filter_complex,
+           " ".join(_quote.map(map_args))))
+    else:
+        cmd = ["ffmpeg", "-y"]
+        cmd.extend(ifile_args)
+        cmd.extend(["-filter_complex", filter_complex])
+        cmd.extend(map_args)
+
+        check_call(cmd)
 
 
 if __name__ == '__main__':

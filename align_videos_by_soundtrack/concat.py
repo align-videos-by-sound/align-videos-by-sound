@@ -19,7 +19,7 @@ from itertools import chain
 import numpy as np
 
 from .align import SyncDetector
-from .communicate import check_call, pipes_quote
+from .communicate import call_ffmpeg_with_filtercomplex
 from .ffmpeg_filter_graph import (
     Filter,
     ConcatWithGapFilterGraphBuilder,
@@ -105,7 +105,7 @@ def _build(args):
                 bld.add_video_gap(einf[i + 1]["orig_duration"])
         bld.add_audio_content(i + 1, af(i + 1))
     fc, vmap, amap = bld.build()
-    return [base] + targets, fc, vmap, amap
+    return [base] + targets, fc, [vmap], [amap]
 
 
 def main(args=sys.argv):
@@ -203,32 +203,14 @@ If you hate this behaviour, specify this option.''' % (
     files, fc, vmap, amap = _build(args)
     v_extra_ffargs = json.loads(args.v_extra_ffargs) if vmap else []
     a_extra_ffargs = json.loads(args.a_extra_ffargs) if amap else []
-    maps = filter(None, [vmap, amap])
-    ifile_args = list(chain.from_iterable(
-            [('-i', f) for f in files]))
-    map_args = list(chain.from_iterable(
-            [("-map", m) for m in maps])) + \
-            v_extra_ffargs + a_extra_ffargs + [args.outfile]
-    #
-    if args.mode == "script_bash":
-        _quote = pipes_quote()
-        print("""\
-#! /bin/sh
+    call_ffmpeg_with_filtercomplex(
+        args.mode,
+        files,
+        fc,
+        v_extra_ffargs + a_extra_ffargs,
+        zip(vmap, amap),
+        [args.outfile])
 
-ffmpeg -y \\
-  {} \\
-  -filter_complex "
-{}
-" {}""".format(" ".join(_quote.map(ifile_args)),
-           fc,
-           " ".join(_quote.map(map_args))))
-    else:
-        cmd = ["ffmpeg", "-y"]
-        cmd.extend(ifile_args)
-        cmd.extend(["-filter_complex", fc])
-        cmd.extend(map_args)
-
-        check_call(cmd)
 
 #
 if __name__ == '__main__':
