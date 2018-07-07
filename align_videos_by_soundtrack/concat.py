@@ -32,14 +32,10 @@ _logger = logging.getLogger(__name__)
 
 
 def _build(args):
-    chk = check_and_decode_filenames([args.base])
-    if not chk:
-        sys.exit(1)
-    base = chk[0]
-
-    targets = check_and_decode_filenames(args.splitted)
-    if not targets:
-        sys.exit(1)
+    base = check_and_decode_filenames(
+        [args.base], exit_if_error=True)[0]
+    targets = check_and_decode_filenames(
+        args.splitted, min_num_files=2, exit_if_error=True)
 
     a_filter_extra = json.loads(args.a_filter_extra) if args.a_filter_extra else {}
     v_filter_extra = json.loads(args.v_filter_extra) if args.v_filter_extra else {}
@@ -202,9 +198,6 @@ If you hate this behaviour, specify this option.''' % (
             _cache.cache_root_dir))
     #####
     args = parser.parse_args(args[1:])
-    if len(args.splitted) < 2:
-        parser.print_usage()
-        sys.exit(1)
     logging.basicConfig(
         level=logging.DEBUG,
         stream=sys.stderr,

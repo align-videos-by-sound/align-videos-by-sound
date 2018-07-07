@@ -325,12 +325,8 @@ It is possible to pass any media that ffmpeg can handle.',)
         stream=sys.stderr,
         format="%(created)f|%(levelname)5s:%(module)s#%(funcName)s:%(message)s")
 
-    file_specs = []
-    if args.file_names and len(args.file_names) >= 2:
-        file_specs = check_and_decode_filenames(args.file_names)
-        # _logger.debug(file_specs)
-    else:  # No pipe and no input file, print help text and exit
-        _bailout(parser)
+    file_specs = check_and_decode_filenames(
+        args.file_names, min_num_files=2)
     if not file_specs:
         _bailout(parser)
 

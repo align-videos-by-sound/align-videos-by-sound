@@ -28,13 +28,27 @@ else:
         return s
 
 
-def check_and_decode_filenames(files):
+def check_and_decode_filenames(
+    files,
+    min_num_files=0,
+    exit_if_error=False):
+
     result = list(map(_decode, map(os.path.abspath, files)))
     nf_files = [path for path in result if not os.path.isfile(path)]
     if nf_files:
         for nf in nf_files:
             _logger.error("{}: No such file.".format(nf))
+        if exit_if_error:
+            sys.exit(1)
         return []
+    if min_num_files and len(result) < min_num_files:
+        _logger.error(
+            "At least {} files are necessary.".format(
+                min_num_files))
+        if exit_if_error:
+            sys.exit(1)
+        return []
+
     return result
 
 

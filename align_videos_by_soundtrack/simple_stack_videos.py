@@ -123,10 +123,9 @@ pan=stereo|\\
 
 def _build(args):
     shape = json.loads(args.shape) if args.shape else (2, 2)
-    files = check_and_decode_filenames(args.files)
-    if not files:
-        sys.exit(1)
-
+    files = check_and_decode_filenames(
+        args.files,
+        min_num_files=2, exit_if_error=True)
     if len(files) < shape[0] * shape[1]:
         files = files + [files[i % len(files)]
                          for i in range(shape[0] * shape[1] - len(files))]
