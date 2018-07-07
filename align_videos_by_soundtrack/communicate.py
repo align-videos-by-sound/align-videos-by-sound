@@ -40,6 +40,21 @@ else:
 # low-level APIs
 #
 
+class pipes_quote(object):
+    def __init__(self, needs_to_quote=True):
+        self._needs_to_quote = needs_to_quote
+
+    def __call__(self, s):
+        if self._needs_to_quote:
+            import pipes
+            return pipes.quote(s)
+        return s
+
+    def map(self, iterable):
+        for iter in iterable:
+            yield self.__call__(iter)
+
+        
 def _filter_args(*cmd):
     """
     do filtering None, and do encoding items to bytes

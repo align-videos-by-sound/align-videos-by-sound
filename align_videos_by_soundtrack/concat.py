@@ -19,7 +19,7 @@ from itertools import chain
 import numpy as np
 
 from .align import SyncDetector
-from .communicate import check_call
+from .communicate import check_call, pipes_quote
 from .ffmpeg_filter_graph import (
     Filter,
     ConcatWithGapFilterGraphBuilder,
@@ -201,23 +201,17 @@ If you hate this behaviour, specify this option.''' % (
         format="%(created)f|%(levelname)5s:%(module)s#%(funcName)s:%(message)s")
 
     files, fc, vmap, amap = _build(args)
-    def _quote(s):
-        if args.mode == "script_bash":
-            import pipes
-            return pipes.quote(s)
-        return s
-    v_extra_ffargs = list(map(_quote, json.loads(args.v_extra_ffargs))) if vmap else []
-    a_extra_ffargs = list(map(_quote, json.loads(args.a_extra_ffargs))) if amap else []
+    v_extra_ffargs = json.loads(args.v_extra_ffargs) if vmap else []
+    a_extra_ffargs = json.loads(args.a_extra_ffargs) if amap else []
     maps = filter(None, [vmap, amap])
     ifile_args = list(chain.from_iterable(
-            [('-i', _quote(f)) for f in files]))
+            [('-i', f) for f in files]))
     map_args = list(chain.from_iterable(
-            [("-map", _quote(m)) for m in maps])) + \
-            v_extra_ffargs + \
-            a_extra_ffargs + \
-            [_quote(args.outfile)]
+            [("-map", m) for m in maps])) + \
+            v_extra_ffargs + a_extra_ffargs + [args.outfile]
     #
     if args.mode == "script_bash":
+        _quote = pipes_quote()
         print("""\
 #! /bin/sh
 
@@ -225,9 +219,9 @@ ffmpeg -y \\
   {} \\
   -filter_complex "
 {}
-" {}""".format(" ".join(ifile_args),
+" {}""".format(" ".join(_quote.map(ifile_args)),
            fc,
-           " ".join(map_args)))
+           " ".join(_quote.map(map_args))))
     else:
         cmd = ["ffmpeg", "-y"]
         cmd.extend(ifile_args)

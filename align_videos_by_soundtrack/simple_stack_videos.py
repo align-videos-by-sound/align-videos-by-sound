@@ -21,7 +21,7 @@ from itertools import chain
 import numpy as np
 
 from .align import SyncDetector
-from .communicate import check_call, parse_time
+from .communicate import check_call, parse_time, pipes_quote
 from .ffmpeg_filter_graph import Filter, ConcatWithGapFilterGraphBuilder
 from .utils import check_and_decode_filenames
 from . import _cache
@@ -274,35 +274,25 @@ If you hate this behaviour, specify this option.''' % (
         format="%(created)f|%(levelname)5s:%(module)s#%(funcName)s:%(message)s")
     
     files, fc, (vmap, amap) = _build(args)
-    def _quote(s):
-        if args.mode == "script_bash":
-            import pipes
-            return pipes.quote(s)
-        return s
-
-    ifile_args = list(chain.from_iterable(
-            [('-i', _quote(f)) for f in files]))
-    v_extra_ffargs = list(map(_quote, json.loads(args.v_extra_ffargs))) if vmap else []
-    a_extra_ffargs = list(map(_quote, json.loads(args.a_extra_ffargs))) if amap else []
+    ifile_args = chain.from_iterable([('-i', f) for f in files])
+    v_extra_ffargs = json.loads(args.v_extra_ffargs) if vmap else []
+    a_extra_ffargs = json.loads(args.a_extra_ffargs) if amap else []
     if args.video_mode == 'indivisual' or args.audio_mode == 'indivisual':
         outbase, outext = os.path.splitext(args.outfile)
-        outfiles = [_quote("{}_{:02d}{}".format(outbase, i, outext))
+        outfiles = ["{}_{:02d}{}".format(outbase, i, outext)
                     for i in range(len(vmap))]
         map_args = list(chain.from_iterable(
-                [["-map", _quote(mv), "-map", _quote(ma)] + \
-                     v_extra_ffargs + \
-                     a_extra_ffargs + \
-                     [_quote(fn)]
+                [["-map", mv, "-map", ma] + \
+                     v_extra_ffargs + a_extra_ffargs + [fn]
                  for mv, ma, fn in zip(vmap, amap, outfiles)]))
     else:
         map_args = list(chain.from_iterable(
-                [("-map", _quote(m))
+                [("-map", m)
                  for m in vmap + amap])) + \
-                 v_extra_ffargs + \
-                 a_extra_ffargs + \
-                 [_quote(args.outfile)]
+                 v_extra_ffargs + a_extra_ffargs + [args.outfile]
 
     if args.mode == "script_bash":
+        _quote = pipes_quote()
         print("""\
 #! /bin/sh
 
@@ -311,9 +301,9 @@ ffmpeg -y \\
   -filter_complex "
 {}
 " {}
-""".format(" ".join(ifile_args),
+""".format(" ".join(_quote.map(ifile_args)),
            fc,
-           " ".join(map_args)))
+           " ".join(_quote.map(map_args))))
     else:
         cmd = ["ffmpeg", "-y"]
         cmd.extend(ifile_args)
