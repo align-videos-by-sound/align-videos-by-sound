@@ -242,20 +242,16 @@ class SyncDetector(object):
         trim_post = list(
             (orig_dur - trim_pre) - (orig_dur - trim_pre).min())
         #
-        return [
-            [
-                files[i],
-                {
-                    "trim": trim_pre[i],
-                    "pad": pad_pre[i],
-                    "orig_duration": orig_dur[i],
-                    "trim_post": trim_post[i],
-                    "pad_post": pad_post[i],
-                    "orig_streams": strms_info[i][0],
-                    "orig_streams_summary": strms_info[i][1],
-                    }
-                ]
-            for i in range(len(files))]
+        return [{
+                "trim": trim_pre[i],
+                "pad": pad_pre[i],
+                "orig_duration": orig_dur[i],
+                "trim_post": trim_post[i],
+                "pad_post": pad_post[i],
+                "orig_streams": strms_info[i][0],
+                "orig_streams_summary": strms_info[i][1],
+                }
+                for i in range(len(files))]
 
 
 def _bailout(parser):
@@ -339,7 +335,8 @@ It is possible to pass any media that ffmpeg can handle.',)
             max_misalignment=communicate.parse_time(args.max_misalignment),
             known_delay_ge_map=known_delay_ge_map)
     if args.json:
-        print(json.dumps({'edit_list': result}, indent=4, sort_keys=True))
+        print(json.dumps(
+                {'edit_list': list(zip(file_specs, result))}, indent=4, sort_keys=True))
     else:
         report = []
         for i, path in enumerate(file_specs):

@@ -53,12 +53,12 @@ def _build(args):
             res = sd.align(
                 [base, targets[i]],
                 known_delay_ge_map=known_delay_ge_map)
-            gaps.append((start, res[0][1]["trim"] - start))
-            start = res[0][1]["trim"] + (res[1][1]["orig_duration"] - res[1][1]["trim"])
+            gaps.append((start, res[0]["trim"] - start))
+            start = res[0]["trim"] + (res[1]["orig_duration"] - res[1]["trim"])
             known_delay_ge_map[0] = start
             if i == 0:
-                einf.append(res[0][1])
-            einf.append(res[1][1])
+                einf.append(res[0])
+            einf.append(res[1])
     #
     width, height = 0, 0
     sample_rate = 0

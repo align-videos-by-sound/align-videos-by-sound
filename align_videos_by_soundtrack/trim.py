@@ -49,7 +49,7 @@ See the help of alignment_info_by_sound_track.""")
     with SyncDetector() as sd:
         infos = sd.align(files, max_misalignment=args.max_misalignment)
 
-        for fn, editinfo in infos:
+        for fn, editinfo in list(zip(files, infos)):
             start_offset = editinfo["trim"]
             duration = editinfo["orig_duration"] - start_offset - editinfo["trim_post"]
             if start_offset > 0 or duration > 0:

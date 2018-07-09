@@ -139,7 +139,7 @@ def _build(args):
         shape=shape, w=args.w, h=args.h, sample_rate=args.sample_rate)
     with SyncDetector(dont_cache=args.dont_cache) as det:
         for i, inf in enumerate(det.align(files, max_misalignment=parse_time(args.max_misalignment))):
-            pre, post = inf[1]["pad"], inf[1]["pad_post"]
+            pre, post = inf["pad"], inf["pad_post"]
             if not (pre > 0 and post > 0):
                 # FIXME:
                 #  In this case, if we don't add paddings, we'll encount the following:
