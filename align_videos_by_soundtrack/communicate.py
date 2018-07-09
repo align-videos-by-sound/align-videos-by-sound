@@ -307,6 +307,7 @@ def _summarize_streams(streams):
     >>> result = _summarize_streams(_parse_ffprobe_output(s)["streams"])
     >>> print(json.dumps(result, indent=2, sort_keys=True).replace(', \n', ',\n'))
     {
+      "max_fps": 29.97,
       "max_resol_height": 1080,
       "max_resol_width": 1920,
       "max_sample_rate": 44100,
@@ -321,6 +322,7 @@ def _summarize_streams(streams):
     >>> result = _summarize_streams(_parse_ffprobe_output(s)["streams"])
     >>> print(json.dumps(result, indent=2, sort_keys=True).replace(', \n', ',\n'))
     {
+      "max_fps": 0.0,
       "max_resol_height": 0,
       "max_resol_width": 0,
       "max_sample_rate": 44100,
@@ -332,6 +334,7 @@ def _summarize_streams(streams):
         max_resol_width=0,
         max_resol_height=0,
         max_sample_rate=0,
+        max_fps=0.0,
         num_video_streams=0,
         num_audio_streams=0)
 
@@ -340,13 +343,16 @@ def _summarize_streams(streams):
     result["num_audio_streams"] = sum(
         [st["type"] == "Audio" for st in streams])
     for st in streams:
-        if "resolution" in st:
+        if st["type"] == "Video":
             new_w, new_h = st["resolution"][0]
             result["max_resol_width"] = max(
                 result["max_resol_width"], new_w)
             result["max_resol_height"] = max(
                 result["max_resol_height"], new_h)
-        elif "sample_rate" in st:
+            if "fps" in st:
+                result["max_fps"] = max(
+                    result["max_fps"], st["fps"])
+        elif st["type"] == "Audio":
             result["max_sample_rate"] = max(
                 result["max_sample_rate"], st["sample_rate"])
 
