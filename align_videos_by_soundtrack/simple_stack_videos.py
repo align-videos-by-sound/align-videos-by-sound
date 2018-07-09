@@ -31,12 +31,12 @@ _logger = logging.getLogger(__name__)
 
 
 class _StackVideosFilterGraphBuilder(object):
-    def __init__(self, shape=(2, 2), w=960, h=540, sample_rate=44100):
+    def __init__(self, shape=(2, 2), w=960, h=540, fps=29.97, sample_rate=44100):
         self._shape = shape
         self._builders = []
         for i in range(shape[0] * shape[1]):
             self._builders.append(
-                ConcatWithGapFilterGraphBuilder(i, w, h, sample_rate))
+                ConcatWithGapFilterGraphBuilder(i, w, h, fps, sample_rate))
 
     def set_paddings(self, idx, pre, post, v_filter_extra, a_filter_extra):
         self._builders[idx].add_video_gap(pre)
@@ -135,11 +135,19 @@ def _build(args):
     a_filter_extra = json.loads(args.a_filter_extra) if args.a_filter_extra else {}
     v_filter_extra = json.loads(args.v_filter_extra) if args.v_filter_extra else {}
     #
-    b = _StackVideosFilterGraphBuilder(
-        shape=shape, w=args.w, h=args.h, sample_rate=args.sample_rate)
     with SyncDetector(dont_cache=args.dont_cache) as det:
-        for i, inf in enumerate(det.align(files, max_misalignment=parse_time(args.max_misalignment))):
-            pre, post = inf[1]["pad"], inf[1]["pad_post"]
+        ares = det.align(files, max_misalignment=parse_time(args.max_misalignment))
+    qual = SyncDetector.summarize_stream_infos(ares)
+
+    b = _StackVideosFilterGraphBuilder(
+        shape=shape,
+        w=args.w,
+        h=args.h,
+        fps=qual["max_fps"],
+        sample_rate=args.sample_rate if args.sample_rate else qual["max_sample_rate"])
+    with SyncDetector(dont_cache=args.dont_cache) as det:
+        for i, inf in enumerate(ares):
+            pre, post = inf["pad"], inf["pad_post"]
             if not (pre > 0 and post > 0):
                 # FIXME:
                 #  In this case, if we don't add paddings, we'll encount the following:
@@ -238,8 +246,9 @@ See the help of alignment_info_by_sound_track. (default: %(default)s)""")
         '--shape', type=str, default="[2, 2]",
         help="The shape of the tile, like '[2, 2]'. (default: %(default)s)")
     parser.add_argument(
-        '--sample_rate', type=int, default=44100,
-        help="Sampling rate of the output file. (default: %(default)d)")
+        '--sample_rate', type=int, default=0,
+        help="Sampling rate of the output file. Passing zero means that \
+it takes from max sample rate of input medias. (default: %(default)d)")
     parser.add_argument(
         '--width-per-cell', dest="w", type=int, default=960,
         help="Width of the cell. (default: %(default)d)")

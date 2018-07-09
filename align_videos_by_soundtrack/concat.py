@@ -53,33 +53,28 @@ def _build(args):
             res = sd.align(
                 [base, targets[i]],
                 known_delay_ge_map=known_delay_ge_map)
-            gaps.append((start, res[0][1]["trim"] - start))
-            start = res[0][1]["trim"] + (res[1][1]["orig_duration"] - res[1][1]["trim"])
+            gaps.append((start, res[0]["trim"] - start))
+            start = res[0]["trim"] + (res[1]["orig_duration"] - res[1]["trim"])
             known_delay_ge_map[0] = start
             if i == 0:
-                einf.append(res[0][1])
-            einf.append(res[1][1])
+                einf.append(res[0])
+            einf.append(res[1])
     #
-    width, height = 0, 0
-    sample_rate = 0
-    has_video = []
-    for i in range(len(einf)):
-        # detect resolution, etc.
-        summary = einf[i]["orig_streams_summary"]
-        has_video.append(summary["num_video_streams"] > 0)
-        width = max(width, summary["max_resol_width"])
-        height = max(height, summary["max_resol_height"])
-        sample_rate = max(sample_rate, summary["max_sample_rate"])
-
-    targets_have_video = any(has_video[1:])
-    bld = ConcatWithGapFilterGraphBuilder("c", w=width, h=height, sample_rate=sample_rate)
+    qual = SyncDetector.summarize_stream_infos(einf)
+    targets_have_video = any(qual["has_video"][1:])
+    bld = ConcatWithGapFilterGraphBuilder(
+        "c",
+        w=qual["max_width"],
+        h=qual["max_height"],
+        fps=qual["max_fps"],
+        sample_rate=qual["max_sample_rate"])
     for i in range(len(targets)):
         start, gap = gaps[i]
         if gap > 0 and (
             not np.isclose(start, 0) or args.start_gap != "omit"):
 
-            if targets_have_video or has_video[0]:
-                if not has_video[0] or args.video_gap == "black":
+            if targets_have_video or qual["has_video"][0]:
+                if not qual["has_video"][0] or args.video_gap == "black":
                     bld.add_video_gap(gap)
                 else:
                     fv = Filter()
@@ -97,8 +92,8 @@ def _build(args):
                 bld.add_audio_content(0, ",".join(
                         list(filter(None, [af(0), fa.to_str()]))))
 
-        if targets_have_video or has_video[0]:
-            if has_video[i + 1]:
+        if targets_have_video or qual["has_video"][0]:
+            if qual["has_video"][i + 1]:
                 bld.add_video_content(i + 1, vf(i + 1))
             else:
                 # wav, mp3, etc...
