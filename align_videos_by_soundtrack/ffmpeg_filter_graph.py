@@ -106,12 +106,14 @@ class Filter(object):
         return "".join(chain.from_iterable(zip(v, a)))
         
     def add_filter(self, name, *args, **kwargs):
-        self._filters.append(
-            mk_single_filter_body(name, *args, **kwargs))
+        if name:
+            self._filters.append(
+                mk_single_filter_body(name, *args, **kwargs))
 
     def insert_filter(self, i, name, *args, **kwargs):
-        self._filters.insert(
-            i, mk_single_filter_body(name, *args, **kwargs))
+        if name:
+            self._filters.insert(
+                i, mk_single_filter_body(name, *args, **kwargs))
 
     def append_outlabel_v(self, templ="[v%(counter)d]"):
         global _olab_counter
