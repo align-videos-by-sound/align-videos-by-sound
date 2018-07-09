@@ -66,6 +66,7 @@ def _build(args):
         "c",
         w=qual["max_width"],
         h=qual["max_height"],
+        fps=qual["max_fps"],
         sample_rate=qual["max_sample_rate"])
     for i in range(len(targets)):
         start, gap = gaps[i]

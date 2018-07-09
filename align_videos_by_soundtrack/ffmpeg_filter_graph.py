@@ -133,13 +133,14 @@ class Filter(object):
 
 
 class ConcatWithGapFilterGraphBuilder(object):
-    def __init__(self, ident, w=960, h=540, sample_rate=44100):
+    def __init__(self, ident, w=960, h=540, fps=29.97, sample_rate=44100):
         self._ident = ident
 
         # black video stream
         fpadv = Filter()
         fpadv.add_filter(
             "color", s="%dx%d" % (w, h), d="{duration:.3f}")
+        fpadv.add_filter("fps", fps="%.2f" % fps)
         fpadv.add_filter("setsar", "1")
         fpadv.ov.append("[gap{gapno}v%s]" % ident)
         self._tmpl_gapv = (fpadv.to_str(), "".join(fpadv.ov))
@@ -164,6 +165,7 @@ class ConcatWithGapFilterGraphBuilder(object):
         # filter to original video stream
         fbodyv = Filter()
         fbodyv.iv.append("[{stream_no}:v]")
+        fbodyv.add_filter("fps", fps="%.2f" % fps)
         fbodyv.add_filter("{v_filter_extra}scale", w, h)
         fbodyv.add_filter("setsar", "1")
         fbodyv.ov.append("[v%s_{bodyident}]" % ident)

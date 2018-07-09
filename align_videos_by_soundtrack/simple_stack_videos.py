@@ -31,12 +31,12 @@ _logger = logging.getLogger(__name__)
 
 
 class _StackVideosFilterGraphBuilder(object):
-    def __init__(self, shape=(2, 2), w=960, h=540, sample_rate=44100):
+    def __init__(self, shape=(2, 2), w=960, h=540, fps=29.97, sample_rate=44100):
         self._shape = shape
         self._builders = []
         for i in range(shape[0] * shape[1]):
             self._builders.append(
-                ConcatWithGapFilterGraphBuilder(i, w, h, sample_rate))
+                ConcatWithGapFilterGraphBuilder(i, w, h, fps, sample_rate))
 
     def set_paddings(self, idx, pre, post, v_filter_extra, a_filter_extra):
         self._builders[idx].add_video_gap(pre)
@@ -143,6 +143,7 @@ def _build(args):
         shape=shape,
         w=args.w,
         h=args.h,
+        fps=qual["max_fps"],
         sample_rate=args.sample_rate if args.sample_rate else qual["max_sample_rate"])
     with SyncDetector(dont_cache=args.dont_cache) as det:
         for i, inf in enumerate(ares):
