@@ -8,11 +8,15 @@ from __future__ import absolute_import
 
 import sys
 import os
+import io
+import json
 import logging
 
 
 __all__ = [
     "check_and_decode_filenames",
+    "json_load",
+    "json_loads",
     ]
 
 _logger = logging.getLogger(__name__)
@@ -50,6 +54,25 @@ def check_and_decode_filenames(
         return []
 
     return result
+
+
+def json_loads(jsonsting):
+    import re
+    _pat = re.compile(
+        r'''/\*.*?\*/|"(?:\\.|[^\\"])*"''',
+        re.DOTALL | re.MULTILINE)
+    def _repl(m):
+        s = m.group(0)
+        if s.startswith("/"):
+            return " "
+        else:
+            return s
+    return json.loads(re.sub(_pat, _repl, jsonsting))
+
+
+def json_load(jsonfilename):
+    raw = io.open(jsonfilename, encoding="utf-8").read()
+    return json_loads(raw)
 
 
 if __name__ == '__main__':
