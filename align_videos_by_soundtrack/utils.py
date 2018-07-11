@@ -56,6 +56,11 @@ def check_and_decode_filenames(
     return result
 
 
+# ================================================================
+#
+# Configuration related
+#
+
 def json_loads(jsonsting):
     import re
     _pat = re.compile(
@@ -73,6 +78,47 @@ def json_loads(jsonsting):
 def json_load(jsonfilename):
     raw = io.open(jsonfilename, encoding="utf-8").read()
     return json_loads(raw)
+
+
+# ---------------------------------------
+#
+# Validation helpers
+#
+def validate_type_one_by_template(
+    chktrg, tmpl, depthstr, not_empty=True, exit_on_error=True):
+
+    if type(chktrg) != type(tmpl) or not chktrg:
+        _logger.error("""%s must be %s""" % (
+                depthstr, type(tmpl)))
+        if exit_on_error:
+            sys.exit(1)
+        return False
+    return True
+
+
+def validate_dict_one_by_template(
+    chktrg, tmpl, mandkeys, depthstr, not_empty=True, exit_on_error=True):
+
+    if not validate_type_one_by_template(
+        chktrg, tmpl, depthstr, not_empty, exit_on_error):
+        return False
+
+    for mk in mandkeys:
+        if mk not in chktrg:
+            _logger.error("""Missing key '%s' in %s""" % (
+                    mk, depthstr))
+            if exit_on_error:
+                sys.exit(1)
+            return False
+    allow_keys = tmpl.keys()
+    unk = (set(allow_keys) | set(chktrg.keys())) - set(allow_keys)
+    if unk:
+        _logger.error("""Unknown keys in %s: %s""" % (
+                depthstr, ", ".join(list(unk))))
+        if exit_on_error:
+            sys.exit(1)
+        return False
+    return True
 
 
 if __name__ == '__main__':
