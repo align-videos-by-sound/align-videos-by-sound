@@ -88,3 +88,19 @@ Usage:
 Audio-only media may be passed to both `base` and `divided`.
 
 See `concat_videos_by_sound_track --help` for more details.
+
+
+### simple_compile_videos_by_sound_track
+What this script does is quite similar to `concat_videos_by_sound_track`, but it does
+a bit more general tasks. Suppose there is a main unedited movie, there are multiple
+sub movie materials you want to insert into it. With this script, these materials can
+be superimposed or replaced at specific times. Unlike video editing software with a
+higher GUI, WYSWYG editing is not possible and there are no effect functions, but
+by using this script it is easy to insert material without being aware of synchronization
+point.
+
+Usage:
+
+    simple_compile_videos_by_sound_track edit_definitionfile
+
+See `simple_compile_videos_by_sound_track --help` for more details.
