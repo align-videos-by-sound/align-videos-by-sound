@@ -451,7 +451,11 @@ def call_ffmpeg_with_filtercomplex(
     #
     if mode == "script_bash":
         _quote = pipes_quote()
-        sys.stdout.buffer.write("""\
+        try:
+            buf = sys.stdout.buffer
+        except AttributeError:
+            buf = sys.stdout
+        buf.write("""\
 #! /bin/sh
 # -*- coding: utf-8 -*-
 
