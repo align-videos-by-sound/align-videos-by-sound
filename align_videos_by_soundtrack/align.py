@@ -380,12 +380,12 @@ It is possible to pass any media that ffmpeg can handle.',)
     else:
         report = []
         for i, path in enumerate(file_specs):
-            if not (result[i][1]["trim"] > 0):
+            if not (result[i]["trim"] > 0):
                 continue
             report.append(
                 """Result: The beginning of '%s' needs to be trimmed off %.4f seconds \
 (or to be added %.4f seconds padding) for all files to be in sync""" % (
-                    path, result[i][1]["trim"], result[i][1]["pad"]))
+                    path, result[i]["trim"], result[i]["pad"]))
         if report:
             print("\n".join(report))
         else:
