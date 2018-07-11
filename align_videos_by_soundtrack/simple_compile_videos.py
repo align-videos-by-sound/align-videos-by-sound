@@ -569,7 +569,7 @@ streams are not used. This is to avoid making the interface of the
 program unintelligible. For example, if "main" does not contain a video
 stream, consider making an instruction to use "main" with "select".
 In this case, what should I do? Do I fill in with black images? Technically
-this is absolutely impossible, but I would like to avoid confusing users
+this is not impossible at all, but I would like to avoid confusing users
 who are only interested in the most basic use cases.
 """ % (textwrap.indent(_sample_editinfo, " " * 4))),
                                      formatter_class=argparse.RawDescriptionHelpFormatter)
