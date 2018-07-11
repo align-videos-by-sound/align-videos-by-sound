@@ -38,25 +38,86 @@ Example JSON output:
                 "/home/jorgen/workspace/multimedia/align-videos-by-sound-python3/tests/testfiles/7-secs-in.mp4",
                 {
                     "trim": -0.0,
-                    "pad": 6.997333333333334
+                    "pad": 6.994666666666666,
+                    "orig_duration": 8.08,
+                    "trim_post": 0.010666666666667268,
+                    "pad_post": 0.005333333333334522,
+                    "orig_streams": [
+                        {
+                            "type": "Video",
+                            "resolution": [
+                                [
+                                    10,
+                                    18
+                                ],
+                                "[SAR 81:80 DAR 9:16]"
+                            ],
+                            "fps": 25.0
+                        },
+                        {
+                            "type": "Audio",
+                            "sample_rate": 48000
+                        }
+                    ]
                 }
             ],
             [
                 "/home/jorgen/workspace/multimedia/align-videos-by-sound-python3/tests/testfiles/3-secs-in.mp4",
                 {
                     "trim": 4.010666666666666,
-                    "pad": 2.9866666666666672
+                    "pad": 2.984,
+                    "orig_duration": 12.08,
+                    "trim_post": 0.0,
+                    "pad_post": 0.016000000000000014,
+                    "orig_streams": [
+                        {
+                            "type": "Video",
+                            "resolution": [
+                                [
+                                    10,
+                                    18
+                                ],
+                                "[SAR 81:80 DAR 9:16]"
+                            ],
+                            "fps": 25.0
+                        },
+                        {
+                            "type": "Audio",
+                            "sample_rate": 48000
+                        }
+                    ]
                 }
             ],
             [
                 "/home/jorgen/workspace/multimedia/align-videos-by-sound-python3/tests/testfiles/full.mp4",
                 {
-                    "trim": 6.997333333333334,
-                    "pad": 0.0
+                    "trim": 6.994666666666666,
+                    "pad": 0.0,
+                    "orig_duration": 15.08,
+                    "trim_post": 0.01600000000000179,
+                    "pad_post": 0.0,
+                    "orig_streams": [
+                        {
+                            "type": "Video",
+                            "resolution": [
+                                [
+                                    10,
+                                    18
+                                ],
+                                "[SAR 81:80 DAR 9:16]"
+                            ],
+                            "fps": 25.0
+                        },
+                        {
+                            "type": "Audio",
+                            "sample_rate": 48000
+                        }
+                    ]
                 }
             ]
         ]
     }
+
 
 
 
