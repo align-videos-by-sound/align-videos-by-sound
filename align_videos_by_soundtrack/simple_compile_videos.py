@@ -538,9 +538,9 @@ it is easy to insert material without being aware of synchronization point.
 
 This script takes simple text (JSON) file describing the definition for
 indicating the intercuts position like this:
-
+--------------------------------------------------
 %s
-
+--------------------------------------------------
 In `inputs`, describe the file information about the main and sub and
 the filter (if necessary) to be applied to each.
 
@@ -571,8 +571,7 @@ stream, consider making an instruction to use "main" with "select".
 In this case, what should I do? Do I fill in with black images? Technically
 this is not impossible at all, but I would like to avoid confusing users
 who are only interested in the most basic use cases.
-""" % (textwrap.indent(_sample_editinfo, " " * 4))),
-                                     formatter_class=argparse.RawDescriptionHelpFormatter)
+""" % _sample_editinfo), formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("definition",
                         help="\
 Text (JSON) file describing the definition for indicating the intercuts \
