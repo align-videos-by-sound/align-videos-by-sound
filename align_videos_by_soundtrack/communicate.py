@@ -30,7 +30,7 @@ _logger = logging.getLogger(__name__)
 
 if hasattr("", "decode"):  # python 2
     def _encode(s):
-        return s.encode(sys.stdout.encoding)
+        return s.encode(sys.getfilesystemencoding())
 else:
     def _encode(s):
         return s
