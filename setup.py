@@ -22,6 +22,7 @@ else:
                 'concat_videos_by_sound_track = align_videos_by_soundtrack.concat:main',
                 'simple_stack_videos_by_sound_track = align_videos_by_soundtrack.simple_stack_videos:main',
                 'trim_by_sound_track = align_videos_by_soundtrack.trim:main',
+                'simple_compile_videos_by_sound_track = align_videos_by_soundtrack.simple_compile_videos:main',
                 ],
         },
     }

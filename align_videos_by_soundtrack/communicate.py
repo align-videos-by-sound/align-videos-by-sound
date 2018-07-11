@@ -30,7 +30,7 @@ _logger = logging.getLogger(__name__)
 
 if hasattr("", "decode"):  # python 2
     def _encode(s):
-        return s.encode(sys.stdout.encoding)
+        return s.encode(sys.getfilesystemencoding())
 else:
     def _encode(s):
         return s
@@ -451,7 +451,11 @@ def call_ffmpeg_with_filtercomplex(
     #
     if mode == "script_bash":
         _quote = pipes_quote()
-        print("""\
+        try:
+            buf = sys.stdout.buffer
+        except AttributeError:
+            buf = sys.stdout
+        buf.write("""\
 #! /bin/sh
 # -*- coding: utf-8 -*-
 
@@ -462,7 +466,7 @@ ffmpeg -y \\
 " {}
 """.format(" ".join(_quote.map(ifile_args)),
            filter_complex,
-           " ".join(_quote.map(map_args))))
+           " ".join(_quote.map(map_args))).encode("utf-8"))
     else:
         cmd = ["ffmpeg", "-y"]
         cmd.extend(ifile_args)
