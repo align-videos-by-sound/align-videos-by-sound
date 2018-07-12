@@ -211,6 +211,20 @@ class SyncDetector(object):
         #
         return pad_pre, trim_pre
 
+    def get_media_info(self, files):
+        """
+        Get information about the media (by calling ffprobe).
+
+        Originally the "align" method had been internally acquired to get
+        "pad_post" etc. When trying to implement editing processing of a
+        real movie, it is very frequent to want to know these information
+        (especially duration) in advance. Therefore we decided to release
+        this as a method of this class. Since the retrieved result is held
+        in the instance variable of class, there is no need to worry about
+        performance.
+        """
+        return [self._get_media_info(fn) for fn in files]
+
     def align(self, files, fft_bin_size=1024, overlap=0, box_height=512, box_width=43, samples_per_box=7,
               max_misalignment=0, known_delay_ge_map={}):
         """
@@ -220,7 +234,7 @@ class SyncDetector(object):
             self._sample_rate, files, fft_bin_size, overlap, box_height, box_width, samples_per_box,
             max_misalignment, known_delay_ge_map)
         #
-        infos = [self._get_media_info(fn) for fn in files]
+        infos = self.get_media_info(files)
         orig_dur = np.array([inf["duration"] for inf in infos])
         strms_info = [
             (inf["streams"], inf["streams_summary"]) for inf in infos]
