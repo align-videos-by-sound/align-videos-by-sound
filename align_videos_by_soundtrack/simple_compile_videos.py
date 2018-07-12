@@ -204,9 +204,18 @@ def validate_definition(definition):
         _check_dict(c, t, ["file"], "'inputs[sub][%d]'" % i)
     c, t = definition["intercuts"], tmpl["intercuts"]
     _check_type(c, t, "intercuts")
+
+    nfiles = len(definition["inputs"]["sub"]) + 1
     for i, c in enumerate(definition["intercuts"]):
         t = tmpl["intercuts"][0]
         _check_dict(c, t, ["sub_idx"], "'intercuts[%d]'" % i)
+        if (c["sub_idx"] + 1) < 0 or nfiles <= (c["sub_idx"] + 1):
+            # It is a secret that you can express "main" with -1.
+            _logger.error("""\
+%s: sub_idx(=%d) is out of range.""" % (
+                    "'intercuts[%d]'" % i,
+                    c["sub_idx"]))
+            sys.exit(1)
 
 
 def _make_list_of_trims(definition):
