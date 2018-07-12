@@ -26,7 +26,10 @@ import logging
 import numpy as np
 
 from .align import SyncDetector
-from .communicate import parse_time, call_ffmpeg_with_filtercomplex
+from .communicate import (
+    parse_time,
+    call_ffmpeg_with_filtercomplex,
+    duration_to_hhmmss)
 from .ffmpeg_filter_graph import Filter
 from .utils import (
     check_and_decode_filenames,
@@ -311,6 +314,8 @@ def _make_list_of_trims(definition):
     trims_list = []
     st_main = 0
     def _desired_dur_is_too_small(s, e):
+        if s < 0 or e < 0:
+            return True
         # trim doesn't work if dur is smaller than gap between frames.
         if qual["max_fps"]:
             return (e - s) < 1./qual["max_fps"]
@@ -365,13 +370,40 @@ def _make_list_of_trims(definition):
             p = params[0] if params else "sub"
             use_indexes.append(_get_idx(p))
         for idx in use_indexes:
-            trims.append((
-                    idx,
-                    base_trims_table[idx][i][0],
-                    base_trims_table[idx][i][1]))
+            s, e = base_trims_table[idx][i]
+            if (s >= 0 and e >= 0):
+                trims.append((idx, s, e))
+            else:
+                # If the start time or end time are negative,
+                # that is, if this sub material does not exist
+                # at that time (at "main" counting), let's replace
+                # it with the other material with warning.
+                # Funny things happen, such as overlaying "main"
+                # on "main", or amergeing "main" and "main"
+                # depending on user's instructions, but I do not
+                # mind as long as a warning is issued.
+                for alt in range(len(base_trims_table)):
+                    sa, ea = base_trims_table[alt][i]
+                    if (sa >= 0 and ea >= 0):
+                        _logger.warn("""\
+Negative time was found ("%s", "%s") for '%s'. \
+We used '%s' ("%s", "%s") instead.""",
+                                     duration_to_hhmmss(s),
+                                     duration_to_hhmmss(e),
+                                     os.path.basename(files[idx]),
+                                     os.path.basename(files[alt]),
+                                     duration_to_hhmmss(sa),
+                                     duration_to_hhmmss(ea))
+                        trims.append((alt, sa, ea))
+                        break
+                else:
+                    _logger.error("""\
+Negative time was found ("%s", "%s") for '%s'. """,
+                                  duration_to_hhmmss(s),
+                                  duration_to_hhmmss(e),
+                                  os.path.basename(files[idx]))
+                    sys.exit(1)
         trims = np.array(trims)
-        if trims[:,1].min() < 0:
-            trims[:,1] -= trims[:,1].min()
         trims[:,2] = trims[:,1] + (trims[:,2] - trims[:,1]).min()
         if not _desired_dur_is_too_small(st_main, trims[0,1]):
             # insert main into gap
