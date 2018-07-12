@@ -325,6 +325,11 @@ def _make_list_of_trims(definition):
     base_trims_table = _mk_trims_table(intercuts, einf, qual)
     last = 0  # default bottom layer for blend
     for i, ins in enumerate(intercuts):
+        if base_trims_table[0][i][0] >= base_trims_table[0][i][1]:
+            # Start >= end, that is, it was completely filled in
+            # the following segment.
+            continue
+
         trims_list.append({
                 k: ins[k] for k in (
                     "video_mode", "video_mode_params",
