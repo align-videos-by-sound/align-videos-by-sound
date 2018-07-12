@@ -112,10 +112,11 @@ def check_stderroutput(*popenargs, **kwargs):
 
 
 def duration_to_hhmmss(duration):
-    ss_h = duration // 3600
-    ss_m = duration // 60
-    ss_s = duration % 60
-    return "%02d:%02d:%02d.%s" % (
+    ss_h = abs(duration) // 3600
+    ss_m = abs(duration) // 60
+    ss_s = abs(duration) % 60
+    return "%s%02d:%02d:%02d.%s" % (
+        "" if duration >= 0 else "-",
         ss_h, ss_m, ss_s, ("%.3f" % duration).split(".")[1])
 
 
