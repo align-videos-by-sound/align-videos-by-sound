@@ -147,10 +147,24 @@ class SyncDetector(object):
         Find time delays between video files
         """
         def _each(idx):
+            maxmisal = 0
+            if max_misalignment:
+                # max_misalignment only cuts out the media. After cutting out,
+                # we need to decide how much to investigate, If there really is
+                # a delay close to max_misalignment indefinitely, for true delay
+                # detection, it is necessary to cut out and investigate it with
+                # a value slightly larger than max_misalignment. This can be
+                # thought of as how many loops in _mk_freq_trans_summary should
+                # be minimized.
+                #(fft_bin_size - overlap) / sample_rate
+                maxmisal = max_misalignment
+                maxmisal += 512 * ((fft_bin_size - overlap) / sample_rate)
+                #_logger.debug(maxmisal)
+
             exaud_args = dict(
                 sample_rate=sample_rate, video_file=files[idx],
                 starttime_offset=known_delay_ge_map.get(idx, 0),
-                duration=max_misalignment * 2)
+                duration=maxmisal)
             # First, try getting from cache.
             ck = None
             if not self._dont_cache:
@@ -307,7 +321,7 @@ def main(args=sys.argv):
     parser = argparse.ArgumentParser(prog=args[0], usage=_doc_template)
     parser.add_argument(
         '--max_misalignment',
-        type=str, default="1200",
+        type=str, default="1800",
         help='When handling media files with long playback time, \
 it may take a huge amount of time and huge memory. \
 In such a case, by changing this value to a small value, \
