@@ -35,7 +35,7 @@ def _build(args):
     base = check_and_decode_filenames(
         [args.base], exit_if_error=True)[0]
     targets = check_and_decode_filenames(
-        args.splitted, min_num_files=2, exit_if_error=True)
+        args.splitted, min_num_files=1, exit_if_error=True)
 
     a_filter_extra = json.loads(args.a_filter_extra) if args.a_filter_extra else {}
     v_filter_extra = json.loads(args.v_filter_extra) if args.v_filter_extra else {}
@@ -163,11 +163,13 @@ If the key is blank, it means all input streams. Only single input / single outp
 filters can be used.""")
     #####
     parser.add_argument(
-        '--start_gap', choices=['omit', 'pad'], default='omit',
+        '--start_gap', choices=['omit', 'pad'],
         help="""\
 Controling whether to align the start position with `base` or not. \
 The default is "do not align" (`omit`) because it is not normally suitable for the \
-purpose of `concatanate`.""")
+purpose of `concatanate`. The default is "omit" if there are two or more media \
+specified as "splitted". If there is only one media specified as "splitted", \
+the default is "pad", assuming your goal is to fill in the leading gap.""")
     #####
     parser.add_argument(
         '--v_extra_ffargs', type=str,
@@ -190,6 +192,8 @@ If you hate this behaviour, specify this option.''' % (
             _cache.cache_root_dir))
     #####
     args = parser.parse_args(args[1:])
+    if not args.start_gap:
+        args.start_gap = "omit" if len(args.splitted) > 1 else "pad"
     logging.basicConfig(
         level=logging.DEBUG,
         stream=sys.stderr,
