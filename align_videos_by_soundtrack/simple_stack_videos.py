@@ -136,7 +136,10 @@ def _build(args):
     v_filter_extra = json.loads(args.v_filter_extra) if args.v_filter_extra else {}
     #
     with SyncDetector(dont_cache=args.dont_cache) as det:
-        ares = det.align(files, max_misalignment=parse_time(args.max_misalignment))
+        ares = det.align(
+            files,
+            max_misalignment=parse_time(args.max_misalignment),
+            known_delay_map=json.loads(args.known_delay_map))
     qual = SyncDetector.summarize_stream_infos(ares)
 
     b = _StackVideosFilterGraphBuilder(
@@ -239,9 +242,16 @@ If the key is blank, it means all input streams. Only single input / single outp
 filters can be used.""")
     #####
     parser.add_argument(
-        '--max_misalignment', type=str, default="600",
+        '--max_misalignment',
+        type=str, default="1800",
         help="""\
-See the help of alignment_info_by_sound_track. (default: %(default)s)""")
+Please see `alignment_info_by_sound_track --help'. (default: %(default)s)'""")
+    parser.add_argument(
+        '--known_delay_map',
+        type=str,
+        default="{}",
+        help="""\
+Please see `alignment_info_by_sound_track --help'.""")
     parser.add_argument(
         '--shape', type=str, default="[2, 2]",
         help="The shape of the tile, like '[2, 2]'. (default: %(default)s)")

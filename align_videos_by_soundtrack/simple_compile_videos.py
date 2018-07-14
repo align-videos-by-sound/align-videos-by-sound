@@ -221,7 +221,7 @@ def validate_definition(definition):
             sys.exit(1)
 
 
-def _make_list_of_trims(definition):
+def _make_list_of_trims(definition, max_misalignment, known_delay_map):
     #
     def _translate_definition(definition):
         _inputs = definition["inputs"]  # as human readable
@@ -305,7 +305,10 @@ def _make_list_of_trims(definition):
     files = check_and_decode_filenames(
         [inp["file"] for inp in inputs], exit_if_error=True)
     with SyncDetector() as sd:
-        einf = sd.align(files)
+        einf = sd.align(
+            files,
+            max_misalignment=parse_time(max_misalignment),
+            known_delay_map=known_delay_map)
 
     #
     qual = SyncDetector.summarize_stream_infos(einf)
@@ -451,10 +454,11 @@ Negative time was found ("%s", "%s") for '%s'. """,
     return files, inputs, trims_list, qual
 
 
-def build(definition):
+def build(definition, max_misalignment, known_delay_map):
+    known_delay_map = json.loads(known_delay_map)
     validate_definition(definition)
     files, inputs, trims_list, qual = _make_list_of_trims(
-        definition)
+        definition, max_misalignment, known_delay_map)
 
     # make filter templates
     ftmpl = []
@@ -693,6 +697,18 @@ Additional arguments to ffmpeg for output video streams. Pass list in JSON forma
 Additional arguments to ffmpeg for output audio streams. Pass list in JSON format. \
 (default: '%(default)s')""")
     #####
+    parser.add_argument(
+        '--max_misalignment',
+        type=str, default="1800",
+        help="""\
+Please see `alignment_info_by_sound_track --help'. (default: %(default)s)'""")
+    parser.add_argument(
+        '--known_delay_map',
+        type=str,
+        default="{}",
+        help="""\
+Please see `alignment_info_by_sound_track --help'.""")
+    #####
     args = parser.parse_args(args[1:])
     logging.basicConfig(
         level=logging.DEBUG,
@@ -703,7 +719,10 @@ Additional arguments to ffmpeg for output audio streams. Pass list in JSON forma
         _make_default_definition_main(args, parser)
         sys.exit(0)
 
-    files, fc, vmap, amap = build(json_load(args.definition))
+    files, fc, vmap, amap = build(
+        json_load(args.definition),
+        args.max_misalignment,
+        args.known_delay_map)
     v_extra_ffargs = json_loads(args.v_extra_ffargs) if vmap else []
     a_extra_ffargs = json_loads(args.a_extra_ffargs) if amap else []
     call_ffmpeg_with_filtercomplex(

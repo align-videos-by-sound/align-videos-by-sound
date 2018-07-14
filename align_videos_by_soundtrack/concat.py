@@ -12,6 +12,7 @@ from __future__ import unicode_literals
 from __future__ import absolute_import
 
 import sys
+import os
 import logging
 import json
 from itertools import chain
@@ -19,7 +20,9 @@ from itertools import chain
 import numpy as np
 
 from .align import SyncDetector
-from .communicate import call_ffmpeg_with_filtercomplex
+from .communicate import (
+    parse_time,
+    call_ffmpeg_with_filtercomplex)
 from .ffmpeg_filter_graph import (
     Filter,
     ConcatWithGapFilterGraphBuilder,
@@ -36,6 +39,12 @@ def _build(args):
         [args.base], exit_if_error=True)[0]
     targets = check_and_decode_filenames(
         args.splitted, min_num_files=1, exit_if_error=True)
+    known_delay_map_orig = json.loads(args.known_delay_map)
+    known_delay_map = {}
+    for k in known_delay_map_orig.keys():
+        nk = os.path.abspath(k)
+        known_delay_map[nk] = known_delay_map_orig[k]
+        known_delay_map[nk]["base"] = os.path.abspath(known_delay_map_orig[k]["base"])
 
     a_filter_extra = json.loads(args.a_filter_extra) if args.a_filter_extra else {}
     v_filter_extra = json.loads(args.v_filter_extra) if args.v_filter_extra else {}
@@ -48,14 +57,21 @@ def _build(args):
     einf = []
     with SyncDetector(dont_cache=args.dont_cache) as sd:
         start = 0
-        known_delay_ge_map = {}
+        upd = base not in known_delay_map
         for i in range(len(targets)):
+            if upd and start:
+                known_delay_map.update({
+                        base: {
+                            "base": targets[i],
+                            "min": start
+                            }
+                        })
             res = sd.align(
                 [base, targets[i]],
-                known_delay_ge_map=known_delay_ge_map)
+                max_misalignment=parse_time(args.max_misalignment),
+                known_delay_map=known_delay_map)
             gaps.append((start, res[0]["trim"] - start))
             start = res[0]["trim"] + (res[1]["orig_duration"] - res[1]["trim"])
-            known_delay_ge_map[0] = start
             if i == 0:
                 einf.append(res[0])
             einf.append(res[1])
@@ -183,6 +199,18 @@ Additional arguments to ffmpeg for output video streams. Pass list in JSON forma
         help="""\
 Additional arguments to ffmpeg for output audio streams. Pass list in JSON format. \
 (default: '%(default)s')""")
+    #####
+    parser.add_argument(
+        '--max_misalignment',
+        type=str, default="1800",
+        help="""\
+Please see `alignment_info_by_sound_track --help'. (default: %(default)s)'""")
+    parser.add_argument(
+        '--known_delay_map',
+        type=str,
+        default="{}",
+        help="""\
+Please see `alignment_info_by_sound_track --help'.""")
     #####
     parser.add_argument(
         '--dont_cache',
