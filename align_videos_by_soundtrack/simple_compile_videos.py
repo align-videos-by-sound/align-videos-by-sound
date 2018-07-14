@@ -591,8 +591,11 @@ Do you scan the current directory and create an information file? [y/n] """)
         if not os.path.exists(main_media):
             main_media = None
 
-    pat = input("""name pattern for sub materials? [default: '*.mp4'] """)
-    pat = pat if pat else "*.mp4"
+    while True:
+        pat = input("""name pattern for sub materials? [default: '*.mp4'] """)
+        pat = pat if pat else "*.mp4"
+        if list(glob(pat)):
+            break
     files = [main_media] + list(glob(pat))
     with SyncDetector() as sd:
         infos = list(zip(files, sd.get_media_info(files)))
@@ -603,7 +606,7 @@ Do you scan the current directory and create an information file? [y/n] """)
                 "file": infos[0][0],
                 },
             "sub": [{"file": inf[0],}
-                    for inf in infos]
+                    for inf in infos[1:]]
             },
         "intercuts": [],
         }
