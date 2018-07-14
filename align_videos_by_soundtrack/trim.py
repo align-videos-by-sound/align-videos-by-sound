@@ -9,11 +9,14 @@ from __future__ import unicode_literals
 from __future__ import absolute_import
 
 import sys
+import json
 import logging
 
-from align_videos_by_soundtrack.align import SyncDetector
-from align_videos_by_soundtrack.communicate import (
-    check_call, duration_to_hhmmss)
+from .align import SyncDetector
+from .communicate import (
+    parse_time,
+    check_call,
+    duration_to_hhmmss)
 from .utils import check_and_decode_filenames
 
 
@@ -31,10 +34,19 @@ def main(args=sys.argv):
         "-o", "--outdir", default="_dest")
     parser.add_argument(
         "--trim_end", action="store_true")
+    #####
     parser.add_argument(
-        '--max_misalignment', type=int, default=2*60,
+        '--max_misalignment',
+        type=str, default="1800",
         help="""\
-See the help of alignment_info_by_sound_track.""")
+Please see `alignment_info_by_sound_track --help'. (default: %(default)s)'""")
+    parser.add_argument(
+        '--known_delay_map',
+        type=str,
+        default="{}",
+        help="""\
+Please see `alignment_info_by_sound_track --help'.""")
+    #####
     args = parser.parse_args(args[1:])
     logging.basicConfig(level=logging.DEBUG, stream=sys.stderr)
 
@@ -47,7 +59,10 @@ See the help of alignment_info_by_sound_track.""")
     if not os.path.exists(args.outdir):
         os.mkdir(args.outdir)
     with SyncDetector() as sd:
-        infos = sd.align(files, max_misalignment=args.max_misalignment)
+        infos = sd.align(
+            files,
+            max_misalignment=parse_time(args.max_misalignment),
+            known_delay_map=json.loads(args.known_delay_map))
 
         for fn, editinfo in list(zip(files, infos)):
             start_offset = editinfo["trim"]

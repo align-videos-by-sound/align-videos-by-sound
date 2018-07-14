@@ -221,7 +221,7 @@ def validate_definition(definition):
             sys.exit(1)
 
 
-def _make_list_of_trims(definition):
+def _make_list_of_trims(definition, max_misalignment, known_delay_map):
     #
     def _translate_definition(definition):
         _inputs = definition["inputs"]  # as human readable
@@ -305,7 +305,10 @@ def _make_list_of_trims(definition):
     files = check_and_decode_filenames(
         [inp["file"] for inp in inputs], exit_if_error=True)
     with SyncDetector() as sd:
-        einf = sd.align(files)
+        einf = sd.align(
+            files,
+            max_misalignment=parse_time(max_misalignment),
+            known_delay_map=known_delay_map)
 
     #
     qual = SyncDetector.summarize_stream_infos(einf)
@@ -325,6 +328,11 @@ def _make_list_of_trims(definition):
     base_trims_table = _mk_trims_table(intercuts, einf, qual)
     last = 0  # default bottom layer for blend
     for i, ins in enumerate(intercuts):
+        if base_trims_table[0][i][0] >= base_trims_table[0][i][1]:
+            # Start >= end, that is, it was completely filled in
+            # the following segment.
+            continue
+
         trims_list.append({
                 k: ins[k] for k in (
                     "video_mode", "video_mode_params",
@@ -446,10 +454,11 @@ Negative time was found ("%s", "%s") for '%s'. """,
     return files, inputs, trims_list, qual
 
 
-def build(definition):
+def build(definition, max_misalignment, known_delay_map):
+    known_delay_map = json.loads(known_delay_map)
     validate_definition(definition)
     files, inputs, trims_list, qual = _make_list_of_trims(
-        definition)
+        definition, max_misalignment, known_delay_map)
 
     # make filter templates
     ftmpl = []
@@ -565,6 +574,55 @@ def build(definition):
         return files, ";\n".join(result_fg), [], [fconcat.oa[0]]
 
 
+def _make_default_definition_main(args, parser):
+    yn = input("""\
+An editing information file was not specified on the command line.
+Do you scan the current directory and create an information file? [y/n] """)
+    if yn.lower() == "n":
+        if input("""Output help? [y/n] """) == "y":
+            import pydoc
+            pydoc.pager(parser.format_help())
+        return
+    #
+    from glob import glob
+    pat = input("""file's name pattern? [default: '*.mp4'] """)
+    pat = pat if pat else "*.mp4"
+    files = list(glob(pat))
+    with SyncDetector() as sd:
+        infos = list(zip(files, sd.get_media_info(files)))
+    infos.sort(key=lambda x: -x[1]["duration"])
+    result = {
+        "inputs": {
+            "main": {
+                "file": infos[0][0],
+                },
+            "sub": [{"file": inf[0],}
+                    for inf in infos]
+            },
+        "intercuts": [],
+        }
+    if input("""Should I fill in the default "intercuts"? [y/n] """) == "y":
+        idx = 0
+        dur = int(infos[0][1]["duration"])
+        for t in range(0, dur, min(dur // 2, 10)):
+            result["intercuts"].append({
+                    "sub_idx": idx % len(result["inputs"]["sub"]),
+                    "start_time": t,
+                    "time_origin": "main",
+                    "video_mode": "select",
+                    "video_mode_params": ["sub"],
+                    "audio_mode": "select",
+                    "audio_mode_params": ["sub"],
+                    })
+            idx += 1
+
+    ofn = input("""\
+What sort of name will you save this definition? [default: sample.json] """)
+    ofn = ofn if ofn else "sample.json"
+    with io.open(ofn, "w", encoding="utf-8") as fo:
+        json.dump(result, fo, indent=2, sort_keys=True)
+
+
 def main(args=sys.argv):
     import argparse, textwrap
 
@@ -614,6 +672,7 @@ this is not impossible at all, but I would like to avoid confusing users
 who are only interested in the most basic use cases.
 """ % _sample_editinfo), formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("definition",
+                        nargs="?",
                         help="\
 Text (JSON) file describing the definition for indicating the intercuts \
 position.")
@@ -638,13 +697,32 @@ Additional arguments to ffmpeg for output video streams. Pass list in JSON forma
 Additional arguments to ffmpeg for output audio streams. Pass list in JSON format. \
 (default: '%(default)s')""")
     #####
+    parser.add_argument(
+        '--max_misalignment',
+        type=str, default="1800",
+        help="""\
+Please see `alignment_info_by_sound_track --help'. (default: %(default)s)'""")
+    parser.add_argument(
+        '--known_delay_map',
+        type=str,
+        default="{}",
+        help="""\
+Please see `alignment_info_by_sound_track --help'.""")
+    #####
     args = parser.parse_args(args[1:])
     logging.basicConfig(
         level=logging.DEBUG,
         stream=sys.stderr,
         format="%(created)f|%(levelname)5s:%(module)s#%(funcName)s:%(message)s")
 
-    files, fc, vmap, amap = build(json_load(args.definition))
+    if not args.definition:
+        _make_default_definition_main(args, parser)
+        sys.exit(0)
+
+    files, fc, vmap, amap = build(
+        json_load(args.definition),
+        args.max_misalignment,
+        args.known_delay_map)
     v_extra_ffargs = json_loads(args.v_extra_ffargs) if vmap else []
     a_extra_ffargs = json_loads(args.a_extra_ffargs) if amap else []
     call_ffmpeg_with_filtercomplex(

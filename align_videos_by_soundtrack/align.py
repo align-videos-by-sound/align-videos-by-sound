@@ -29,6 +29,7 @@ It reports back the offset. Example:
 import os
 import sys
 from collections import defaultdict
+import math
 import tempfile
 import shutil
 import logging
@@ -80,7 +81,11 @@ def _mk_freq_trans_summary(data, fft_bin_size, overlap, box_height, box_width, m
     return freqs_dict
 
 
-def _find_delay(freqs_dict_orig, freqs_dict_sample):
+def _find_delay(
+    freqs_dict_orig, freqs_dict_sample,
+    min_delay=float('nan'),
+    max_delay=float('nan')):
+    #
     keys = set(freqs_dict_sample.keys()) & set(freqs_dict_orig.keys())
     #
     if not keys:
@@ -93,7 +98,10 @@ def _find_delay(freqs_dict_orig, freqs_dict_sample):
         for x_i in freqs_dict_sample[key]:  # determine time offset
             for x_j in freqs_dict_orig[key]:
                 delta_t = x_i - x_j
-                t_diffs[delta_t] += 1
+                mincond_ok = math.isnan(min_delay) or delta_t >= min_delay
+                maxcond_ok = math.isnan(max_delay) or delta_t <= max_delay
+                inc = 1 if mincond_ok and maxcond_ok else 0
+                t_diffs[delta_t] += inc
 
     t_diffs_sorted = sorted(list(t_diffs.items()), key=lambda x: x[1])
     # _logger.debug(t_diffs_sorted)
@@ -123,7 +131,7 @@ class SyncDetector(object):
                 retry -= 1
                 time.sleep(1)
 
-    def _extract_audio(self, sample_rate, video_file, starttime_offset, duration):
+    def _extract_audio(self, sample_rate, video_file, duration):
         """
         Extract audio from video file, save as wav auido file
 
@@ -132,7 +140,6 @@ class SyncDetector(object):
         """
         return communicate.media_to_mono_wave(
             video_file, self._working_dir,
-            starttime_offset=starttime_offset,
             duration=duration,
             sample_rate=sample_rate)
 
@@ -142,15 +149,28 @@ class SyncDetector(object):
         return self._orig_infos[fn]
 
     def _align(self, sample_rate, files, fft_bin_size, overlap, box_height, box_width, samples_per_box,
-               max_misalignment, known_delay_ge_map):
+               max_misalignment, known_delay_map):
         """
         Find time delays between video files
         """
         def _each(idx):
+            maxmisal = 0
+            if max_misalignment:
+                # max_misalignment only cuts out the media. After cutting out,
+                # we need to decide how much to investigate, If there really is
+                # a delay close to max_misalignment indefinitely, for true delay
+                # detection, it is necessary to cut out and investigate it with
+                # a value slightly larger than max_misalignment. This can be
+                # thought of as how many loops in _mk_freq_trans_summary should
+                # be minimized.
+                #(fft_bin_size - overlap) / sample_rate
+                maxmisal = max_misalignment
+                maxmisal += 512 * ((fft_bin_size - overlap) / sample_rate)
+                #_logger.debug(maxmisal)
+
             exaud_args = dict(
                 sample_rate=sample_rate, video_file=files[idx],
-                starttime_offset=known_delay_ge_map.get(idx, 0),
-                duration=max_misalignment * 2)
+                duration=maxmisal)
             # First, try getting from cache.
             ck = None
             if not self._dont_cache:
@@ -166,7 +186,7 @@ class SyncDetector(object):
                 ck = _cache.make_cache_key(**for_cache)
                 cv = _cache.get("_align", ck)
                 if cv:
-                    return cv
+                    return cv[1]
             else:
                 _cache.clean("_align")
 
@@ -180,60 +200,78 @@ class SyncDetector(object):
             del raw_audio
             if not self._dont_cache:
                 _cache.set("_align", ck, (rate, ft_dict))
-            return rate, ft_dict
+            return ft_dict
         #
-        tmp_result = [0.0]
-
-        # Process first file
-        rate, ft_dict1 = _each(0)
+        samps_per_sec = self._sample_rate / float(fft_bin_size)
+        ftds = {i: _each(i) for i in range(len(files))}
+        _result1, _result2 = {}, {}
+        for kdm_key in known_delay_map.keys():
+            kdm = known_delay_map[kdm_key]
+            try:
+                it = files.index(os.path.abspath(kdm_key))
+                ib = files.index(os.path.abspath(kdm["base"]))
+            except ValueError:  # simply ignore
+                continue
+            delay = _find_delay(
+                ftds[ib], ftds[it],
+                kdm.get("min", float("nan")) * samps_per_sec,
+                kdm.get("max", float("nan")) * samps_per_sec)
+            _result1[(ib, it)] = -delay / samps_per_sec
+        #
+        _result2[(0, 0)] = 0.0
         for i in range(len(files) - 1):
-            # Process second file
-            rate, ft_dict2 = _each(i + 1)
-
-            # Determie time delay
-            delay = _find_delay(ft_dict1, ft_dict2)
-            samples_per_sec = float(rate) / float(fft_bin_size)
-            seconds = float(delay) / float(samples_per_sec)
-
-            #
-            tmp_result.append(-seconds)
-
-        result = np.array(tmp_result)
-        if known_delay_ge_map:
-            for i in range(len(result)):
-                if i in known_delay_ge_map:
-                    result += known_delay_ge_map[i]
-                    result[i] -= known_delay_ge_map[i]
+            if (0, i + 1) in _result1:
+                _result2[(0, i + 1)] = _result1[(0, i + 1)]
+            elif (i + 1, 0) in _result1:
+                _result2[(0, i + 1)] = -_result1[(i + 1, 0)]
+            else:
+                delay = _find_delay(ftds[0], ftds[i + 1])
+                _result2[(0, i + 1)] = -delay / samps_per_sec
+        #        [0, 1], [0, 2], [0, 3]
+        # known: [1, 2]
+        # _______________^^^^^^[0, 2] must be calculated by [0, 1], and [1, 2]
+        # 
+        # known: [1, 2], [2, 3]
+        # _______________^^^^^^[0, 2] must be calculated by [0, 1], and [1, 2]
+        # _______________^^^^^^^^[0, 3] must be calculated by [0, 2], and [2, 3]
+        for ib, it in sorted(_result1.keys()):
+            for i in range(len(files) - 1):
+                if ib > 0 and it == i + 1 and (0, i + 1) not in _result1 and (i + 1, 0) not in _result1:
+                    _result2[(0, it)] = _result2[(0, ib)] - _result1[(ib, it)]
+                elif it > 0 and ib == i + 1 and (0, i + 1) not in _result1 and (i + 1, 0) not in _result1:
+                    _result2[(0, ib)] = _result2[(0, it)] + _result1[(ib, it)]
 
         # build result
+        result = np.array([_result2[k] for k in sorted(_result2.keys())])
         pad_pre = result - result.min()
         trim_pre = -(pad_pre - pad_pre.max())
         #
         return pad_pre, trim_pre
 
+    def get_media_info(self, files):
+        """
+        Get information about the media (by calling ffprobe).
+
+        Originally the "align" method had been internally acquired to get
+        "pad_post" etc. When trying to implement editing processing of a
+        real movie, it is very frequent to want to know these information
+        (especially duration) in advance. Therefore we decided to release
+        this as a method of this class. Since the retrieved result is held
+        in the instance variable of class, there is no need to worry about
+        performance.
+        """
+        return [self._get_media_info(fn) for fn in files]
+
     def align(self, files, fft_bin_size=1024, overlap=0, box_height=512, box_width=43, samples_per_box=7,
-              max_misalignment=0, known_delay_ge_map={}):
+              max_misalignment=0, known_delay_map={}):
         """
         Find time delays between video files
         """
-        # First, try finding delays roughly by passing low sample rate.
-        pad_pre, trim_pre = self._align(
-            44100 // 4, files, fft_bin_size, overlap, box_height, box_width, samples_per_box,
-            max_misalignment, known_delay_ge_map)
-
-        # update knwown map, and max_misalignment
-        known_delay_ge_map = {
-            i: max(0.0, int(trim_pre[i] - 5.0))
-            for i in range(len(trim_pre))
-            }
-        max_misalignment = 30
-
-        # Finally, try finding delays precicely
         pad_pre, trim_pre = self._align(
             self._sample_rate, files, fft_bin_size, overlap, box_height, box_width, samples_per_box,
-            max_misalignment, known_delay_ge_map)
+            max_misalignment, known_delay_map)
         #
-        infos = [self._get_media_info(fn) for fn in files]
+        infos = self.get_media_info(files)
         orig_dur = np.array([inf["duration"] for inf in infos])
         strms_info = [
             (inf["streams"], inf["streams_summary"]) for inf in infos]
@@ -306,22 +344,30 @@ def main(args=sys.argv):
     parser = argparse.ArgumentParser(prog=args[0], usage=_doc_template)
     parser.add_argument(
         '--max_misalignment',
-        type=str, default="600",
-        help='When handling media files with long playback time, \
-it may take a huge amount of time and huge memory. \
-In such a case, by changing this value to a small value, \
-it is possible to indicate the scanning range of the media file to the program. \
-(default: %(default)s)')
+        type=str, default="1800",
+        help="""When handling media files with long playback time,
+it may take a huge amount of time and huge memory.
+In such a case, by changing this value to a small value,
+it is possible to indicate the scanning range of the media file to the program.
+(default: %(default)s)""")
     parser.add_argument(
-        '--known_delay_ge_map',
+        '--known_delay_map',
         type=str,
-        help='''When handling media files with long playback time, \
-furthermore, when the delay time of a certain movie is large,
-it may take a huge amount of time and huge memory. \
-In such a case, you can give a mapping of the delay times that are roughly known. \
-Please pass it in JSON format, like '{"1": 120}'. The key is an index corresponding \
-to the file passed as "file_names". The value is the number of seconds, meaning \
-"at least larger than this".''')
+        default="{}",
+        help='''\
+Delay detection by feature comparison of frequency intensity may be wrong.
+Since it is an approach that takes only one maximum value of the delay 
+which can best explain the difference in the intensity distribution, if 
+it happens to have a range where characteristics are similar, it adopts it 
+by mistake. "known_delay_map" is a mechanism for forcing this detection
+error manually. For example, if the detection process returns 3 seconds
+despite knowing that the delay is greater than at least 20 minutes,
+you can complain with using "known_delay_map" like "It's over 20 minutes!".
+Please pass it in JSON format, like 
+'{"foo.mp4": {"min": 120, "max": 140, "base": "bar.mp4"}}'
+Specify the adjustment as to which media is adjusted to "base", the minimum and 
+maximum delay as "min", "max". The values of "min", "max"
+are the number of seconds.''')
     parser.add_argument(
         '--sample_rate',
         type=int,
@@ -349,13 +395,7 @@ If you hate this behaviour, specify this option.''' % (
         help='Media files including audio streams. \
 It is possible to pass any media that ffmpeg can handle.',)
     args = parser.parse_args(args[1:])
-    known_delay_ge_map = {}
-    if args.known_delay_ge_map:
-        known_delay_ge_map = json.loads(args.known_delay_ge_map)
-        known_delay_ge_map = {
-            int(k): known_delay_ge_map[k]
-            for k in known_delay_ge_map.keys()
-            }
+    known_delay_map = json.loads(args.known_delay_map)
 
     logging.basicConfig(
         level=logging.DEBUG,
@@ -373,7 +413,7 @@ It is possible to pass any media that ffmpeg can handle.',)
         result = det.align(
             file_specs,
             max_misalignment=communicate.parse_time(args.max_misalignment),
-            known_delay_ge_map=known_delay_ge_map)
+            known_delay_map=known_delay_map)
     if args.json:
         print(json.dumps(
                 {'edit_list': list(zip(file_specs, result))}, indent=4, sort_keys=True))
