@@ -585,9 +585,15 @@ Do you scan the current directory and create an information file? [y/n] """)
         return
     #
     from glob import glob
-    pat = input("""file's name pattern? [default: '*.mp4'] """)
+    main_media = None
+    while not main_media:
+        main_media = input("""main media? """)
+        if not os.path.exists(main_media):
+            main_media = None
+
+    pat = input("""name pattern for sub materials? [default: '*.mp4'] """)
     pat = pat if pat else "*.mp4"
-    files = list(glob(pat))
+    files = [main_media] + list(glob(pat))
     with SyncDetector() as sd:
         infos = list(zip(files, sd.get_media_info(files)))
     infos.sort(key=lambda x: -x[1]["duration"])
