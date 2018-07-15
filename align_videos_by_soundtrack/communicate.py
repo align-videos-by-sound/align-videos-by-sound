@@ -381,6 +381,7 @@ def media_to_mono_wave(
     starttime_offset=0,  # -ss
     duration=0,  # -t
     sample_rate=48000,  # -ar
+    afilter="",  # -af
     ):
     """
     Convert the given media to monoral WAV by calling `ffmpeg`.
@@ -390,13 +391,16 @@ def media_to_mono_wave(
     # existence in getatime to understand easily.
     os.path.getatime(video_file)
 
-    _ffmpeg_ss_args = (None, None)
-    ffmpeg_t_args = (None, None)
+    _ss_args = (None, None)
+    _t_args = (None, None)
+    _af_args = (None, None)
     if starttime_offset > 0:
-        _ffmpeg_ss_args = (
+        _ss_args = (
             "-ss", duration_to_hhmmss(starttime_offset))
     if duration and duration > 0:
-        ffmpeg_t_args = ("-t", "%d" % duration)
+        _t_args = ("-t", "%d" % duration)
+    if afilter:
+        _af_args = ("-af", afilter)
 
     track_name = os.path.basename(video_file)
     # !! CHECK TO SEE IF FILE IS IN UPLOADS DIRECTORY
@@ -407,10 +411,11 @@ def media_to_mono_wave(
     if not os.path.exists(output):
         cmd = [
                 "ffmpeg", "-hide_banner", "-y",
-                _ffmpeg_ss_args[0], _ffmpeg_ss_args[1],
-                ffmpeg_t_args[0], ffmpeg_t_args[1],
+                _ss_args[0], _ss_args[1],
+                _t_args[0], _t_args[1],
                 "-i", "%s" % video_file,
                 "-vn",
+                _af_args[0], _af_args[1],
                 "-ar", "%d" % sample_rate,
                 "-ac", "1",
                 "-f", "wav",

@@ -25,7 +25,7 @@ import logging
 
 import numpy as np
 
-from .align import SyncDetector
+from .align import SyncDetector, SyncDetectorSummarizerParams
 from .communicate import (
     parse_time,
     call_ffmpeg_with_filtercomplex,
@@ -304,11 +304,12 @@ def _make_list_of_trims(definition, max_misalignment, known_delay_map):
     inputs, intercuts = _translate_definition(definition)
     files = check_and_decode_filenames(
         [inp["file"] for inp in inputs], exit_if_error=True)
-    with SyncDetector() as sd:
-        einf = sd.align(
-            files,
-            max_misalignment=parse_time(max_misalignment),
-            known_delay_map=known_delay_map)
+    if args.summarizer_params:
+        params = SyncDetectorSummarizerParams.from_json(args.summarizer_params)
+    else:
+        params = SyncDetectorSummarizerParams()
+    with SyncDetector(params=params) as sd:
+        einf = sd.align(files, known_delay_map=known_delay_map)
 
     #
     qual = SyncDetector.summarize_stream_infos(einf)
@@ -585,9 +586,18 @@ Do you scan the current directory and create an information file? [y/n] """)
         return
     #
     from glob import glob
-    pat = input("""file's name pattern? [default: '*.mp4'] """)
-    pat = pat if pat else "*.mp4"
-    files = list(glob(pat))
+    main_media = None
+    while not main_media:
+        main_media = input("""main media? """)
+        if not os.path.exists(main_media):
+            main_media = None
+
+    while True:
+        pat = input("""name pattern for sub materials? [default: '*.mp4'] """)
+        pat = pat if pat else "*.mp4"
+        if list(glob(pat)):
+            break
+    files = [main_media] + list(glob(pat))
     with SyncDetector() as sd:
         infos = list(zip(files, sd.get_media_info(files)))
     infos.sort(key=lambda x: -x[1]["duration"])
@@ -597,7 +607,7 @@ Do you scan the current directory and create an information file? [y/n] """)
                 "file": infos[0][0],
                 },
             "sub": [{"file": inf[0],}
-                    for inf in infos]
+                    for inf in infos[1:]]
             },
         "intercuts": [],
         }
@@ -698,10 +708,9 @@ Additional arguments to ffmpeg for output audio streams. Pass list in JSON forma
 (default: '%(default)s')""")
     #####
     parser.add_argument(
-        '--max_misalignment',
-        type=str, default="1800",
-        help="""\
-Please see `alignment_info_by_sound_track --help'. (default: %(default)s)'""")
+        '--summarizer_params',
+        type=str,
+        help="""Please see `alignment_info_by_sound_track --help'.""")
     parser.add_argument(
         '--known_delay_map',
         type=str,

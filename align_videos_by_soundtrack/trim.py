@@ -12,7 +12,7 @@ import sys
 import json
 import logging
 
-from .align import SyncDetector
+from .align import SyncDetector, SyncDetectorSummarizerParams
 from .communicate import (
     parse_time,
     check_call,
@@ -36,10 +36,9 @@ def main(args=sys.argv):
         "--trim_end", action="store_true")
     #####
     parser.add_argument(
-        '--max_misalignment',
-        type=str, default="1800",
-        help="""\
-Please see `alignment_info_by_sound_track --help'. (default: %(default)s)'""")
+        '--summarizer_params',
+        type=str,
+        help="""Please see `alignment_info_by_sound_track --help'.""")
     parser.add_argument(
         '--known_delay_map',
         type=str,
@@ -58,10 +57,13 @@ Please see `alignment_info_by_sound_track --help'.""")
     import os
     if not os.path.exists(args.outdir):
         os.mkdir(args.outdir)
-    with SyncDetector() as sd:
+    if args.summarizer_params:
+        params = SyncDetectorSummarizerParams.from_json(args.summarizer_params)
+    else:
+        params = SyncDetectorSummarizerParams()
+    with SyncDetector(params=params) as sd:
         infos = sd.align(
             files,
-            max_misalignment=parse_time(args.max_misalignment),
             known_delay_map=json.loads(args.known_delay_map))
 
         for fn, editinfo in list(zip(files, infos)):

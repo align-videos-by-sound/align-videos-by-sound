@@ -19,7 +19,7 @@ from itertools import chain
 
 import numpy as np
 
-from .align import SyncDetector
+from .align import SyncDetector, SyncDetectorSummarizerParams
 from .communicate import (
     parse_time,
     call_ffmpeg_with_filtercomplex)
@@ -55,7 +55,11 @@ def _build(args):
     gaps = []
     #
     einf = []
-    with SyncDetector(dont_cache=args.dont_cache) as sd:
+    if args.summarizer_params:
+        params = SyncDetectorSummarizerParams.from_json(args.summarizer_params)
+    else:
+        params = SyncDetectorSummarizerParams()
+    with SyncDetector(params=params, dont_cache=args.dont_cache) as sd:
         start = 0
         upd = base not in known_delay_map
         for i in range(len(targets)):
@@ -68,7 +72,6 @@ def _build(args):
                         })
             res = sd.align(
                 [base, targets[i]],
-                max_misalignment=parse_time(args.max_misalignment),
                 known_delay_map=known_delay_map)
             gaps.append((start, res[0]["trim"] - start))
             start = res[0]["trim"] + (res[1]["orig_duration"] - res[1]["trim"])
@@ -201,10 +204,9 @@ Additional arguments to ffmpeg for output audio streams. Pass list in JSON forma
 (default: '%(default)s')""")
     #####
     parser.add_argument(
-        '--max_misalignment',
-        type=str, default="1800",
-        help="""\
-Please see `alignment_info_by_sound_track --help'. (default: %(default)s)'""")
+        '--summarizer_params',
+        type=str,
+        help="""Please see `alignment_info_by_sound_track --help'.""")
     parser.add_argument(
         '--known_delay_map',
         type=str,

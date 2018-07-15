@@ -20,7 +20,7 @@ from itertools import chain
 
 import numpy as np
 
-from .align import SyncDetector
+from .align import SyncDetector, SyncDetectorSummarizerParams
 from .communicate import parse_time, call_ffmpeg_with_filtercomplex
 from .ffmpeg_filter_graph import Filter, ConcatWithGapFilterGraphBuilder
 from .utils import check_and_decode_filenames
@@ -135,10 +135,13 @@ def _build(args):
     a_filter_extra = json.loads(args.a_filter_extra) if args.a_filter_extra else {}
     v_filter_extra = json.loads(args.v_filter_extra) if args.v_filter_extra else {}
     #
-    with SyncDetector(dont_cache=args.dont_cache) as det:
+    if args.summarizer_params:
+        params = SyncDetectorSummarizerParams.from_json(args.summarizer_params)
+    else:
+        params = SyncDetectorSummarizerParams()
+    with SyncDetector(params=params, dont_cache=args.dont_cache) as det:
         ares = det.align(
             files,
-            max_misalignment=parse_time(args.max_misalignment),
             known_delay_map=json.loads(args.known_delay_map))
     qual = SyncDetector.summarize_stream_infos(ares)
 
@@ -148,27 +151,27 @@ def _build(args):
         h=args.h,
         fps=qual["max_fps"],
         sample_rate=args.sample_rate if args.sample_rate else qual["max_sample_rate"])
-    with SyncDetector(dont_cache=args.dont_cache) as det:
-        for i, inf in enumerate(ares):
-            pre, post = inf["pad"], inf["pad_post"]
-            if not (pre > 0 and post > 0):
-                # FIXME:
-                #  In this case, if we don't add paddings, we'll encount the following:
-                #    [AVFilterGraph @ 0000000003146500] The following filters could not
-                #choose their formats: Parsed_amerge_48
-                #    Consider inserting the (a)format filter near their input or output.
-                #    Error reinitializing filters!
-                #    Failed to inject frame into filter network: I/O error
-                #    Error while processing the decoded data for stream #3:0
-                #    Conversion failed!
-                #
-                #  Just by adding padding just like any other stream, it seems we can
-                #  avoid it, so let's add meaningless padding as a workaround.
-                post = post + 1.0
 
-            vf = ",".join(filter(None, [v_filter_extra.get(""), v_filter_extra.get("%d" % i)]))
-            af = ",".join(filter(None, [a_filter_extra.get(""), a_filter_extra.get("%d" % i)]))
-            b.set_paddings(i, pre, post, vf, af)
+    for i, inf in enumerate(ares):
+        pre, post = inf["pad"], inf["pad_post"]
+        if not (pre > 0 and post > 0):
+            # FIXME:
+            #  In this case, if we don't add paddings, we'll encount the following:
+            #    [AVFilterGraph @ 0000000003146500] The following filters could not
+            #choose their formats: Parsed_amerge_48
+            #    Consider inserting the (a)format filter near their input or output.
+            #    Error reinitializing filters!
+            #    Failed to inject frame into filter network: I/O error
+            #    Error while processing the decoded data for stream #3:0
+            #    Conversion failed!
+            #
+            #  Just by adding padding just like any other stream, it seems we can
+            #  avoid it, so let's add meaningless padding as a workaround.
+            post = post + 1.0
+
+        vf = ",".join(filter(None, [v_filter_extra.get(""), v_filter_extra.get("%d" % i)]))
+        af = ",".join(filter(None, [a_filter_extra.get(""), a_filter_extra.get("%d" % i)]))
+        b.set_paddings(i, pre, post, vf, af)
 
     #
     filters = []
@@ -242,10 +245,9 @@ If the key is blank, it means all input streams. Only single input / single outp
 filters can be used.""")
     #####
     parser.add_argument(
-        '--max_misalignment',
-        type=str, default="1800",
-        help="""\
-Please see `alignment_info_by_sound_track --help'. (default: %(default)s)'""")
+        '--summarizer_params',
+        type=str,
+        help="""Please see `alignment_info_by_sound_track --help'.""")
     parser.add_argument(
         '--known_delay_map',
         type=str,
