@@ -85,7 +85,7 @@ def json_load(jsonfilename):
 # Validation helpers
 #
 def validate_type_one_by_template(
-    chktrg, tmpl, depthstr, not_empty=True, exit_on_error=True):
+    chktrg, tmpl, depthstr="", not_empty=True, exit_on_error=True):
 
     if type(chktrg) != type(tmpl) or not chktrg:
         _logger.error("""%s must be %s""" % (
@@ -97,15 +97,15 @@ def validate_type_one_by_template(
 
 
 def validate_dict_one_by_template(
-    chktrg, tmpl, mandkeys, depthstr, not_empty=True, exit_on_error=True):
+    chktrg, tmpl, mandkeys=[], depthstr="", not_empty=True, exit_on_error=True):
 
     if not validate_type_one_by_template(
         chktrg, tmpl, depthstr, not_empty, exit_on_error):
         return False
-
+    depthstr = "in %s" % depthstr if depthstr else ""
     for mk in mandkeys:
         if mk not in chktrg:
-            _logger.error("""Missing key '%s' in %s""" % (
+            _logger.error("""Missing key '%s' %s""" % (
                     mk, depthstr))
             if exit_on_error:
                 sys.exit(1)
@@ -113,7 +113,7 @@ def validate_dict_one_by_template(
     allow_keys = tmpl.keys()
     unk = (set(allow_keys) | set(chktrg.keys())) - set(allow_keys)
     if unk:
-        _logger.error("""Unknown keys in %s: %s""" % (
+        _logger.error("""Unknown keys %s: %s""" % (
                 depthstr, ", ".join(list(unk))))
         if exit_on_error:
             sys.exit(1)
