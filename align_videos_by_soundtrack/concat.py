@@ -55,10 +55,7 @@ def _build(args):
     gaps = []
     #
     einf = []
-    if args.summarizer_params:
-        params = SyncDetectorSummarizerParams.from_json(args.summarizer_params)
-    else:
-        params = SyncDetectorSummarizerParams()
+    params = SyncDetectorSummarizerParams.from_json(args.summarizer_params)
     with SyncDetector(params=params, dont_cache=args.dont_cache) as sd:
         start = 0
         upd = base not in known_delay_map
@@ -148,7 +145,7 @@ but it goes without saying that it's a "strange" movie.""")
         "-o", "--outfile", dest="outfile", default="concatenated.mp4",
         help="Specifying the output file. (default: %(default)s)")
     parser.add_argument(
-        '--mode', choices=['script_bash', 'direct'], default='script_bash',
+        '--mode', choices=['script_bash', 'script_python', 'direct'], default='script_bash',
         help="""\
 Switching whether to produce bash shellscript or to call ffmpeg directly. (default: %(default)s)""")
     #

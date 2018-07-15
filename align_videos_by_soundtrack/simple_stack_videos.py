@@ -135,10 +135,7 @@ def _build(args):
     a_filter_extra = json.loads(args.a_filter_extra) if args.a_filter_extra else {}
     v_filter_extra = json.loads(args.v_filter_extra) if args.v_filter_extra else {}
     #
-    if args.summarizer_params:
-        params = SyncDetectorSummarizerParams.from_json(args.summarizer_params)
-    else:
-        params = SyncDetectorSummarizerParams()
+    params = SyncDetectorSummarizerParams.from_json(args.summarizer_params)
     with SyncDetector(params=params, dont_cache=args.dont_cache) as det:
         ares = det.align(
             files,
@@ -210,7 +207,7 @@ different thing from this. See the option description.""")
         "-o", "--outfile", dest="outfile", default="merged.mp4",
         help="Specifying the output file. (default: %(default)s)")
     parser.add_argument(
-        '--mode', choices=['script_bash', 'direct'], default='script_bash',
+        '--mode', choices=['script_bash', 'script_python', 'direct'], default='script_bash',
         help="""\
 Switching whether to produce bash shellscript or to call ffmpeg directly. (default: %(default)s)""")
     #####

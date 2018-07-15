@@ -136,11 +136,13 @@ class SyncDetectorSummarizerParams(object):
 
     @staticmethod
     def from_json(s):
-        d = json_loads(s)
+        if s:
+            d = json_loads(s)
 
-        tmpl = SyncDetectorSummarizerParams()
-        validate_dict_one_by_template(d, tmpl.__dict__)
-        return SyncDetectorSummarizerParams(**d)
+            tmpl = SyncDetectorSummarizerParams()
+            validate_dict_one_by_template(d, tmpl.__dict__)
+            return SyncDetectorSummarizerParams(**d)
+        return SyncDetectorSummarizerParams()
 
 
 class _FreqTransSummarizer(object):
@@ -194,7 +196,7 @@ class _FreqTransSummarizer(object):
         return freqs_dict
 
     def _secs_to_x(self, secs):
-        j = secs * float(self._params.sample_rate)
+        j = (secs if secs is not None else 0) * float(self._params.sample_rate)
         x = (j + self._params.overlap) / (self._params.fft_bin_size - self._params.overlap)
         return x
 
@@ -222,6 +224,7 @@ class _FreqTransSummarizer(object):
             afilter=self._params.afilter)
 
     def summarize_audiotrack(self, media, dont_cache):
+        _logger.info("for '%s' begin", os.path.basename(media))
         exaud_args = dict(video_file=media, duration=self._params.max_misalignment)
         # First, try getting from cache.
         ck = None
@@ -234,15 +237,19 @@ class _FreqTransSummarizer(object):
             ck = _cache.make_cache_key(**for_cache)
             cv = _cache.get("_align", ck)
             if cv:
+                _logger.info("for '%s' end", os.path.basename(media))
                 return cv[1]
         else:
             _cache.clean("_align")
 
         # Not found in cache.
+        _logger.info("extracting audio tracks for '%s' begin", os.path.basename(media))
         wavfile = self._extract_audio(**exaud_args)
+        _logger.info("extracting audio tracks for '%s' end", os.path.basename(media))
         rate, ft_dict = self._summarize_wav(wavfile)
         if not dont_cache:
             _cache.set("_align", ck, (rate, ft_dict))
+        _logger.info("for '%s' end", os.path.basename(media))
         return ft_dict
 
     def find_delay(
@@ -510,10 +517,7 @@ It is possible to pass any media that ffmpeg can handle.',)
         args.file_names, min_num_files=2)
     if not file_specs:
         _bailout(parser)
-    if args.summarizer_params:
-        params = SyncDetectorSummarizerParams.from_json(args.summarizer_params)
-    else:
-        params = SyncDetectorSummarizerParams()
+    params = SyncDetectorSummarizerParams.from_json(args.summarizer_params)
     with SyncDetector(
         params=params,
         dont_cache=args.dont_cache) as det:
