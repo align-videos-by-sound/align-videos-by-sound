@@ -196,7 +196,7 @@ class _FreqTransSummarizer(object):
         return freqs_dict
 
     def _secs_to_x(self, secs):
-        j = secs * float(self._params.sample_rate)
+        j = (secs if secs is not None else 0) * float(self._params.sample_rate)
         x = (j + self._params.overlap) / (self._params.fft_bin_size - self._params.overlap)
         return x
 
