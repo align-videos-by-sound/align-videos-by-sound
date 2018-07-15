@@ -47,6 +47,8 @@ class SyncDetectorParams(object):
         self.box_width = kwargs.get("box_width", 43)
         self.maxes_per_box = kwargs.get("maxes_per_box", 7)
 
+        self.afilter = kwargs.get("afilter", "")
+
 
 class _FreqTransSummarizer(object):
     def __init__(self, working_dir, params):
@@ -100,7 +102,7 @@ class _FreqTransSummarizer(object):
         del raw_audio
         return rate, result
 
-    def _extract_audio(self, sample_rate, video_file, duration, afilter):
+    def _extract_audio(self, video_file, duration):
         """
         Extract audio from video file, save as wav auido file
 
@@ -110,10 +112,10 @@ class _FreqTransSummarizer(object):
         return communicate.media_to_mono_wave(
             video_file, self._working_dir,
             duration=duration,
-            sample_rate=sample_rate,
-            afilter=afilter)
+            sample_rate=self._params.sample_rate,
+            afilter=self._params.afilter)
 
-    def summarize_audiotrack(self, media, dont_cache, max_misalignment, afilter):
+    def summarize_audiotrack(self, media, dont_cache, max_misalignment):
         maxmisal = 0
         if max_misalignment:
             # max_misalignment only cuts out the media. After cutting out,
@@ -129,10 +131,7 @@ class _FreqTransSummarizer(object):
                     self._params.fft_bin_size - self._params.overlap) / self._params.sample_rate)
             #_logger.debug(maxmisal)
 
-        exaud_args = dict(
-            sample_rate=self._params.sample_rate, video_file=media,
-            duration=maxmisal,
-            afilter=afilter)
+        exaud_args = dict(video_file=media, duration=maxmisal)
         # First, try getting from cache.
         ck = None
         if not dont_cache:
@@ -212,13 +211,13 @@ class SyncDetector(object):
             self._orig_infos[fn] = communicate.get_media_info(fn)
         return self._orig_infos[fn]
 
-    def _align(self, freqsum, files, max_misalignment, known_delay_map, afilter):
+    def _align(self, freqsum, files, max_misalignment, known_delay_map):
         """
         Find time delays between video files
         """
         def _each(idx):
             return freqsum.summarize_audiotrack(
-                files[idx], self._dont_cache, max_misalignment, afilter)
+                files[idx], self._dont_cache, max_misalignment)
         #
         ftds = {i: _each(i) for i in range(len(files))}
         _result1, _result2 = {}, {}
@@ -295,10 +294,11 @@ class SyncDetector(object):
             overlap=overlap,
             box_height=box_height,
             box_width=box_width,
-            maxes_per_box=maxes_per_box)
+            maxes_per_box=maxes_per_box,
+            afilter=afilter)
         freqsum = _FreqTransSummarizer(self._working_dir, params)
         pad_pre, trim_pre = self._align(
-            freqsum, files, max_misalignment, known_delay_map, afilter)
+            freqsum, files, max_misalignment, known_delay_map)
         #
         infos = self.get_media_info(files)
         orig_dur = np.array([inf["duration"] for inf in infos])
