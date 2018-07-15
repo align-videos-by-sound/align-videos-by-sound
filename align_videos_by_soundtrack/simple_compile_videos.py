@@ -221,7 +221,7 @@ def validate_definition(definition):
             sys.exit(1)
 
 
-def _make_list_of_trims(definition, max_misalignment, known_delay_map):
+def _make_list_of_trims(definition, known_delay_map, args):
     #
     def _translate_definition(definition):
         _inputs = definition["inputs"]  # as human readable
@@ -452,11 +452,11 @@ Negative time was found ("%s", "%s") for '%s'. """,
     return files, inputs, trims_list, qual
 
 
-def build(definition, max_misalignment, known_delay_map):
+def build(definition, known_delay_map, args):
     known_delay_map = json.loads(known_delay_map)
     validate_definition(definition)
     files, inputs, trims_list, qual = _make_list_of_trims(
-        definition, max_misalignment, known_delay_map)
+        definition, known_delay_map, args)
 
     # make filter templates
     ftmpl = []
@@ -687,7 +687,7 @@ position.")
         "-o", "--outfile", dest="outfile", default="compiled.mp4",
         help="Specifying the output file. (default: %(default)s)")
     parser.add_argument(
-        '--mode', choices=['script_bash', 'direct'], default='script_bash',
+        '--mode', choices=['script_bash', 'script_python', 'direct'], default='script_bash',
         help="""\
 Switching whether to produce bash shellscript or to call ffmpeg directly. (default: %(default)s)""")
     #####
@@ -727,8 +727,7 @@ Please see `alignment_info_by_sound_track --help'.""")
 
     files, fc, vmap, amap = build(
         json_load(args.definition),
-        args.max_misalignment,
-        args.known_delay_map)
+        args.known_delay_map, args)
     v_extra_ffargs = json_loads(args.v_extra_ffargs) if vmap else []
     a_extra_ffargs = json_loads(args.a_extra_ffargs) if amap else []
     call_ffmpeg_with_filtercomplex(

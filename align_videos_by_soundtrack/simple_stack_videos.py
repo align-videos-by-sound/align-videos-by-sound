@@ -207,7 +207,7 @@ different thing from this. See the option description.""")
         "-o", "--outfile", dest="outfile", default="merged.mp4",
         help="Specifying the output file. (default: %(default)s)")
     parser.add_argument(
-        '--mode', choices=['script_bash', 'direct'], default='script_bash',
+        '--mode', choices=['script_bash', 'script_python', 'direct'], default='script_bash',
         help="""\
 Switching whether to produce bash shellscript or to call ffmpeg directly. (default: %(default)s)""")
     #####

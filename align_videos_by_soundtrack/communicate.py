@@ -11,6 +11,7 @@ import subprocess
 import sys
 import os
 import re
+import json
 import logging
 from itertools import chain
 
@@ -455,12 +456,12 @@ def call_ffmpeg_with_filtercomplex(
         map_args.extend(extra_ffargs)
         map_args.append(outfiles[0])
     #
+    try:
+        buf = sys.stdout.buffer
+    except AttributeError:
+        buf = sys.stdout
     if mode == "script_bash":
         _quote = pipes_quote()
-        try:
-            buf = sys.stdout.buffer
-        except AttributeError:
-            buf = sys.stdout
         buf.write("""\
 #! /bin/sh
 # -*- coding: utf-8 -*-
@@ -478,8 +479,27 @@ ffmpeg -y \\
         cmd.extend(ifile_args)
         cmd.extend(["-filter_complex", filter_complex])
         cmd.extend(map_args)
+        if mode == "script_python":
+            cmdstr = json.dumps(cmd, indent=4)
+            cmdstr = re.sub(
+                r'''".*\\n.*"''',
+                lambda m: '""' + m.group(0).replace("\\n", "\n") + '""',
+                cmdstr)
+            buf.write("""\
+#! /bin/env python
+# -*- coding: utf-8 -*-
+from __future__ import unicode_literals
+from __future__ import absolute_import
 
-        check_call(cmd)
+from align_videos_by_soundtrack.communicate import check_call
+
+cmd = {}
+
+#
+check_call(cmd)
+""".format(cmdstr).encode("utf-8"))
+        else:
+            check_call(cmd)
 
 
 if __name__ == '__main__':
