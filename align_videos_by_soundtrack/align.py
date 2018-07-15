@@ -88,6 +88,12 @@ class SyncDetectorSummarizerParams(object):
         FFT. That is, it depends on fft_bin_size - overlap. For
         frequencies not to separate, ie, not to create a small box,
         box_height should give (fft_bin_size - overlap) / 2.
+
+    * afilter:
+        This program begins by first extracting audio tracks from the
+        media with ffmpeg. In this case, it is an audio filter given to
+        ffmpeg. If the media is noisy, for example, it may be good to
+        give a bandpass filter etc.
     """
     def __init__(self, **kwargs):
         self.sample_rate = kwargs.get("sample_rate", 48000)
