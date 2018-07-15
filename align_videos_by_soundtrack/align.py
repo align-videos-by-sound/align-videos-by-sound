@@ -94,6 +94,15 @@ class SyncDetectorSummarizerParams(object):
         media with ffmpeg. In this case, it is an audio filter given to
         ffmpeg. If the media is noisy, for example, it may be good to
         give a bandpass filter etc.
+
+    * lowcut, highcut:
+        It is a value for ignoring (truncating) the frequency of
+        a specific range at the time of summarizing. This is more
+        violent and foolish, unlike the so-called proper low cut high
+        cut filter, but it is useful in some cases.
+
+        The same attention as "box_height" holds. Again, the full
+        range is (fft_bin_size - overlap) / 2.
     """
     def __init__(self, **kwargs):
         self.sample_rate = kwargs.get("sample_rate", 48000)
@@ -122,6 +131,9 @@ class SyncDetectorSummarizerParams(object):
             #_logger.debug(maxmisal)
         self.max_misalignment = max_misalignment
 
+        self.lowcut = kwargs.get("lowcut")
+        self.highcut = kwargs.get("highcut")
+
     @staticmethod
     def from_json(s):
         d = json_loads(s)
@@ -148,7 +160,11 @@ class _FreqTransSummarizer(object):
 
         boxes = defaultdict(list)
         for x, j in enumerate(
-            range(int(-self._params.overlap), len(data), int(self._params.fft_bin_size - self._params.overlap))):
+            range(
+                int(-self._params.overlap),
+                len(data),
+                int(self._params.fft_bin_size - self._params.overlap))):
+
             sample_data = data[max(0, j):max(0, j) + self._params.fft_bin_size]
             if (len(sample_data) == self._params.fft_bin_size):  # if there are enough audio points left to create a full fft bin
                 intensities = np.abs(np.fft.fft(sample_data))  # intensities is list of fft results
@@ -157,6 +173,15 @@ class _FreqTransSummarizer(object):
                     box_y = y // self._params.box_height
                     # x: corresponding to time
                     # y: corresponding to freq
+                    if self._params.lowcut is not None and \
+                            isinstance(self._params.lowcut, (int,)):
+                        if y <= self._params.lowcut:
+                            continue
+                    if self._params.highcut is not None and \
+                            isinstance(self._params.highcut, (int,)):
+                        if y >= self._params.highcut:
+                            continue
+
                     boxes[(box_x, box_y)].append((intensities[y], x, y))
                     if len(boxes[(box_x, box_y)]) > self._params.maxes_per_box:
                         boxes[(box_x, box_y)].remove(min(boxes[(box_x, box_y)]))
