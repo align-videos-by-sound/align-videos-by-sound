@@ -24,7 +24,10 @@ import logging
 import numpy as np
 
 from . import communicate
-from .utils import check_and_decode_filenames
+from .utils import (
+    check_and_decode_filenames,
+    json_loads,
+    validate_dict_one_by_template)
 from . import _cache
 
 
@@ -38,13 +41,55 @@ _logger = logging.getLogger(__name__)
 
 
 class SyncDetectorSummarizerParams(object):
+    """
+    Parameter used by SyncDetector for summarizing audio track.
+    It affects the behavior until find_delay return. Conversely,
+    known_delay_map affecting interpretation of find_delay result is not
+    included here.
+
+    * max_misalignment:
+        When handling media files with long playback time,
+        it may take a huge amount of time and huge memory.
+        In such a case, by changing this value to a small value,
+        it is possible to indicate the scanning range of the media
+        file to the program.
+
+    * sample_rate:
+        In this program, delay is examined by unifying all the sample
+        rates of media files into the same one. If this value is the
+        value itself of the media file itself, the result will be more
+        precise. However, this wastes a lot of memory, so you can
+        reduce memory consumption by downsampling (instead losing
+        accuracy a bit). The default value uses quite a lot of memory,
+        but if it changes to a value of, for example, 44100, 22050,
+        etc., although a large error of about several tens of
+        milliseconds  increases, the processing time is greatly
+        shortened.
+
+    * fft_bin_size, overlap:
+        "fft_bin_size" is the number of audio samples passed to the FFT.
+        If it is small, it means "fine" in the time domain viewpoint,
+        whereas the larger it can be resolved into more kinds of
+        frequencies. There is a possibility that it becomes difficult
+        to be deceived as the frequency is examined finely, but instead
+        the time step width of the delay detection becomes "coarse".
+        "overlap" is in order to solve this dilemma. That is, windows
+        for FFT are examined by overlapping each other. "overlap" must
+        be less than "fft_bin_size".
+
+    * box_height, box_width, maxes_per_box:
+        This program sees the characteristics of the audio track by
+        adopting a representative which has high strength in a small
+        box divided into the time axis and the frequency axis.
+        These parameters are those.
+
+        Be careful as to how to give "box_height" is not easy to
+        understand. It depends on the number of samples given to the
+        FFT. That is, it depends on fft_bin_size - overlap. For
+        frequencies not to separate, ie, not to create a small box,
+        box_height should give (fft_bin_size - overlap) / 2.
+    """
     def __init__(self, **kwargs):
-        """
-        Parameter used by SyncDetector (or _FreqTransSummarizer) for summarizing.
-        It affects the behavior until find_delay return. Conversely,
-        known_delay_map affecting interpretation of find_delay result is not
-        included here.
-        """
         self.sample_rate = kwargs.get("sample_rate", 48000)
 
         self.fft_bin_size = kwargs.get("fft_bin_size", 1024)
@@ -55,7 +100,8 @@ class SyncDetectorSummarizerParams(object):
 
         self.afilter = kwargs.get("afilter", "")
 
-        max_misalignment = kwargs.get("max_misalignment", 0.0)
+        max_misalignment = communicate.parse_time(
+            kwargs.get("max_misalignment", 1800))
         if max_misalignment:
             # max_misalignment only cuts out the media. After cutting out,
             # we need to decide how much to investigate, If there really is
@@ -69,6 +115,14 @@ class SyncDetectorSummarizerParams(object):
                     self.fft_bin_size - self.overlap) / self.sample_rate)
             #_logger.debug(maxmisal)
         self.max_misalignment = max_misalignment
+
+    @staticmethod
+    def from_json(s):
+        d = json_loads(s)
+
+        tmpl = SyncDetectorSummarizerParams()
+        validate_dict_one_by_template(d, tmpl.__dict__)
+        return SyncDetectorSummarizerParams(**d)
 
 
 class _FreqTransSummarizer(object):
@@ -356,20 +410,30 @@ def _bailout(parser):
 
 
 def main(args=sys.argv):
-    import argparse
+    import argparse, textwrap
 
-    parser = argparse.ArgumentParser(description="""\
+    parser = argparse.ArgumentParser(description=textwrap.dedent("""\
 This program reports the offset difference for audio and video files,
 containing audio recordings from the same event. It relies on ffmpeg being
-installed and the python libraries scipy and numpy.""")
+installed and the python libraries scipy and numpy.
+
+Delay detection by feature comparison of frequency intensity may be wrong.
+Since it is an approach that takes only one maximum value of the delay 
+which can best explain the difference in the intensity distribution, if 
+it happens to have a range where characteristics are similar, it adopts it 
+by mistake.
+
+As a last resort, you can make it misleading by giving "known_delay_map",
+but it can be rarely solved by adjusting various parameters used by the program
+for summarization. If you want to do this, pass it to the "-summarizer_params"
+option in JSON format. The parameter description is as follows:
+
+%s
+""" % SyncDetectorSummarizerParams.__doc__), formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument(
-        '--max_misalignment',
-        type=str, default="1800",
-        help="""When handling media files with long playback time,
-it may take a huge amount of time and huge memory.
-In such a case, by changing this value to a small value,
-it is possible to indicate the scanning range of the media file to the program.
-(default: %(default)s)""")
+        '--summarizer_params',
+        type=str,
+        help="""See above explanation.""")
     parser.add_argument(
         '--known_delay_map',
         type=str,
@@ -388,17 +452,6 @@ Please pass it in JSON format, like
 Specify the adjustment as to which media is adjusted to "base", the minimum and 
 maximum delay as "min", "max". The values of "min", "max"
 are the number of seconds.''')
-    parser.add_argument(
-        '--sample_rate',
-        type=int,
-        default=48000,
-        help='''In this program, delay is examined by unifying all the sample rates \
-of media files into the same one. If this value is the value itself of the media file \
-itself, the result will be more precise. However, this wastes a lot of memory, so you \
-can reduce memory consumption by downsampling (instead losing accuracy a bit). \
-The default value uses quite a lot of memory, but if it changes to a value of, for example, \
-44100, 22050, etc., although a large error of about several tens of milliseconds \
-increases, the processing time is greatly shortened. (default: %(default)d)''')
     parser.add_argument(
         '--dont_cache',
         action="store_true",
@@ -426,10 +479,10 @@ It is possible to pass any media that ffmpeg can handle.',)
         args.file_names, min_num_files=2)
     if not file_specs:
         _bailout(parser)
-
-    params = SyncDetectorSummarizerParams(
-        sample_rate=args.sample_rate,
-        max_misalignment=communicate.parse_time(args.max_misalignment))
+    if args.summarizer_params:
+        params = SyncDetectorSummarizerParams.from_json(args.summarizer_params)
+    else:
+        params = SyncDetectorSummarizerParams()
     with SyncDetector(
         params=params,
         dont_cache=args.dont_cache) as det:

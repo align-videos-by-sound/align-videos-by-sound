@@ -135,8 +135,10 @@ def _build(args):
     a_filter_extra = json.loads(args.a_filter_extra) if args.a_filter_extra else {}
     v_filter_extra = json.loads(args.v_filter_extra) if args.v_filter_extra else {}
     #
-    params = SyncDetectorSummarizerParams(
-        max_misalignment=parse_time(args.max_misalignment))
+    if args.summarizer_params:
+        params = SyncDetectorSummarizerParams.from_json(args.summarizer_params)
+    else:
+        params = SyncDetectorSummarizerParams()
     with SyncDetector(params=params, dont_cache=args.dont_cache) as det:
         ares = det.align(
             files,
@@ -243,10 +245,9 @@ If the key is blank, it means all input streams. Only single input / single outp
 filters can be used.""")
     #####
     parser.add_argument(
-        '--max_misalignment',
-        type=str, default="1800",
-        help="""\
-Please see `alignment_info_by_sound_track --help'. (default: %(default)s)'""")
+        '--summarizer_params',
+        type=str,
+        help="""Please see `alignment_info_by_sound_track --help'.""")
     parser.add_argument(
         '--known_delay_map',
         type=str,

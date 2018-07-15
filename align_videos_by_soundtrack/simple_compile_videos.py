@@ -304,11 +304,12 @@ def _make_list_of_trims(definition, max_misalignment, known_delay_map):
     inputs, intercuts = _translate_definition(definition)
     files = check_and_decode_filenames(
         [inp["file"] for inp in inputs], exit_if_error=True)
-    params = SyncDetectorSummarizerParams(
-        max_misalignment=parse_time(max_misalignment))
+    if args.summarizer_params:
+        params = SyncDetectorSummarizerParams.from_json(args.summarizer_params)
+    else:
+        params = SyncDetectorSummarizerParams()
     with SyncDetector(params=params) as sd:
-        einf = sd.align(
-            files, known_delay_map=known_delay_map)
+        einf = sd.align(files, known_delay_map=known_delay_map)
 
     #
     qual = SyncDetector.summarize_stream_infos(einf)
@@ -707,10 +708,9 @@ Additional arguments to ffmpeg for output audio streams. Pass list in JSON forma
 (default: '%(default)s')""")
     #####
     parser.add_argument(
-        '--max_misalignment',
-        type=str, default="1800",
-        help="""\
-Please see `alignment_info_by_sound_track --help'. (default: %(default)s)'""")
+        '--summarizer_params',
+        type=str,
+        help="""Please see `alignment_info_by_sound_track --help'.""")
     parser.add_argument(
         '--known_delay_map',
         type=str,

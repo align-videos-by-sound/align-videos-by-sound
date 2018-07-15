@@ -36,10 +36,9 @@ def main(args=sys.argv):
         "--trim_end", action="store_true")
     #####
     parser.add_argument(
-        '--max_misalignment',
-        type=str, default="1800",
-        help="""\
-Please see `alignment_info_by_sound_track --help'. (default: %(default)s)'""")
+        '--summarizer_params',
+        type=str,
+        help="""Please see `alignment_info_by_sound_track --help'.""")
     parser.add_argument(
         '--known_delay_map',
         type=str,
@@ -58,9 +57,11 @@ Please see `alignment_info_by_sound_track --help'.""")
     import os
     if not os.path.exists(args.outdir):
         os.mkdir(args.outdir)
-    params = SyncDetectorSummarizerParams(
-        max_misalignment=parse_time(args.max_misalignment))
-    with SyncDetector() as sd:
+    if args.summarizer_params:
+        params = SyncDetectorSummarizerParams.from_json(args.summarizer_params)
+    else:
+        params = SyncDetectorSummarizerParams()
+    with SyncDetector(params=params) as sd:
         infos = sd.align(
             files,
             known_delay_map=json.loads(args.known_delay_map))
