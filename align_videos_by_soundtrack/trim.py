@@ -57,10 +57,7 @@ Please see `alignment_info_by_sound_track --help'.""")
     import os
     if not os.path.exists(args.outdir):
         os.mkdir(args.outdir)
-    if args.summarizer_params:
-        params = SyncDetectorSummarizerParams.from_json(args.summarizer_params)
-    else:
-        params = SyncDetectorSummarizerParams()
+    params = SyncDetectorSummarizerParams.from_json(args.summarizer_params)
     with SyncDetector(params=params) as sd:
         infos = sd.align(
             files,

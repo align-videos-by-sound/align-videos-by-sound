@@ -55,10 +55,7 @@ def _build(args):
     gaps = []
     #
     einf = []
-    if args.summarizer_params:
-        params = SyncDetectorSummarizerParams.from_json(args.summarizer_params)
-    else:
-        params = SyncDetectorSummarizerParams()
+    params = SyncDetectorSummarizerParams.from_json(args.summarizer_params)
     with SyncDetector(params=params, dont_cache=args.dont_cache) as sd:
         start = 0
         upd = base not in known_delay_map

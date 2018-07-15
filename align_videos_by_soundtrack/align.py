@@ -136,11 +136,13 @@ class SyncDetectorSummarizerParams(object):
 
     @staticmethod
     def from_json(s):
-        d = json_loads(s)
+        if s:
+            d = json_loads(s)
 
-        tmpl = SyncDetectorSummarizerParams()
-        validate_dict_one_by_template(d, tmpl.__dict__)
-        return SyncDetectorSummarizerParams(**d)
+            tmpl = SyncDetectorSummarizerParams()
+            validate_dict_one_by_template(d, tmpl.__dict__)
+            return SyncDetectorSummarizerParams(**d)
+        return SyncDetectorSummarizerParams()
 
 
 class _FreqTransSummarizer(object):
@@ -510,10 +512,7 @@ It is possible to pass any media that ffmpeg can handle.',)
         args.file_names, min_num_files=2)
     if not file_specs:
         _bailout(parser)
-    if args.summarizer_params:
-        params = SyncDetectorSummarizerParams.from_json(args.summarizer_params)
-    else:
-        params = SyncDetectorSummarizerParams()
+    params = SyncDetectorSummarizerParams.from_json(args.summarizer_params)
     with SyncDetector(
         params=params,
         dont_cache=args.dont_cache) as det:
