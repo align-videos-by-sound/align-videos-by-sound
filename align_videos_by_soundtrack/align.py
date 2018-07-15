@@ -29,7 +29,7 @@ from . import _cache
 
 
 __all__ = [
-    'SyncDetectorParams',
+    'SyncDetectorSummarizerParams',
     'SyncDetector',
     'main',
     ]
@@ -37,8 +37,14 @@ __all__ = [
 _logger = logging.getLogger(__name__)
 
 
-class SyncDetectorParams(object):
+class SyncDetectorSummarizerParams(object):
     def __init__(self, **kwargs):
+        """
+        Parameter used by SyncDetector (or _FreqTransSummarizer) for summarizing.
+        It affects the behavior until find_delay return. Conversely,
+        known_delay_map affecting interpretation of find_delay result is not
+        included here.
+        """
         self.sample_rate = kwargs.get("sample_rate", 48000)
 
         self.fft_bin_size = kwargs.get("fft_bin_size", 1024)
@@ -48,6 +54,21 @@ class SyncDetectorParams(object):
         self.maxes_per_box = kwargs.get("maxes_per_box", 7)
 
         self.afilter = kwargs.get("afilter", "")
+
+        max_misalignment = kwargs.get("max_misalignment", 0.0)
+        if max_misalignment:
+            # max_misalignment only cuts out the media. After cutting out,
+            # we need to decide how much to investigate, If there really is
+            # a delay close to max_misalignment indefinitely, for true delay
+            # detection, it is necessary to cut out and investigate it with
+            # a value slightly larger than max_misalignment. This can be
+            # thought of as how many loops in _FreqTransSummarizer#summarize
+            # should be minimized.
+            #(fft_bin_size - overlap) / sample_rate
+            max_misalignment += 512 * ((
+                    self.fft_bin_size - self.overlap) / self.sample_rate)
+            #_logger.debug(maxmisal)
+        self.max_misalignment = max_misalignment
 
 
 class _FreqTransSummarizer(object):
@@ -115,23 +136,8 @@ class _FreqTransSummarizer(object):
             sample_rate=self._params.sample_rate,
             afilter=self._params.afilter)
 
-    def summarize_audiotrack(self, media, dont_cache, max_misalignment):
-        maxmisal = 0
-        if max_misalignment:
-            # max_misalignment only cuts out the media. After cutting out,
-            # we need to decide how much to investigate, If there really is
-            # a delay close to max_misalignment indefinitely, for true delay
-            # detection, it is necessary to cut out and investigate it with
-            # a value slightly larger than max_misalignment. This can be
-            # thought of as how many loops in _FreqTransSummarizer#summarize
-            # should be minimized.
-            #(fft_bin_size - overlap) / sample_rate
-            maxmisal = max_misalignment
-            maxmisal += 512 * ((
-                    self._params.fft_bin_size - self._params.overlap) / self._params.sample_rate)
-            #_logger.debug(maxmisal)
-
-        exaud_args = dict(video_file=media, duration=maxmisal)
+    def summarize_audiotrack(self, media, dont_cache):
+        exaud_args = dict(video_file=media, duration=self._params.max_misalignment)
         # First, try getting from cache.
         ck = None
         if not dont_cache:
@@ -186,11 +192,10 @@ class _FreqTransSummarizer(object):
 
 
 class SyncDetector(object):
-    def __init__(self, sample_rate=48000, dont_cache=False):
+    def __init__(self, params=SyncDetectorSummarizerParams(), dont_cache=False):
         self._working_dir = tempfile.mkdtemp()
         self._impl = _FreqTransSummarizer(
-            self._working_dir,
-            SyncDetectorParams(sample_rate=sample_rate))
+            self._working_dir, params)
         self._dont_cache = dont_cache
         self._orig_infos = {}  # per filename
 
@@ -213,13 +218,13 @@ class SyncDetector(object):
             self._orig_infos[fn] = communicate.get_media_info(fn)
         return self._orig_infos[fn]
 
-    def _align(self, files, max_misalignment, known_delay_map):
+    def _align(self, files, known_delay_map):
         """
         Find time delays between video files
         """
         def _each(idx):
             return self._impl.summarize_audiotrack(
-                files[idx], self._dont_cache, max_misalignment)
+                files[idx], self._dont_cache)
         #
         ftds = {i: _each(i) for i in range(len(files))}
         _result1, _result2 = {}, {}
@@ -277,12 +282,12 @@ class SyncDetector(object):
         return [self._get_media_info(fn) for fn in files]
 
     def align(
-        self, files, max_misalignment=0, known_delay_map={}):
+        self, files, known_delay_map={}):
         """
         Find time delays between video files
         """
         pad_pre, trim_pre = self._align(
-            files, max_misalignment, known_delay_map)
+            files, known_delay_map)
         #
         infos = self.get_media_info(files)
         orig_dur = np.array([inf["duration"] for inf in infos])
@@ -422,12 +427,14 @@ It is possible to pass any media that ffmpeg can handle.',)
     if not file_specs:
         _bailout(parser)
 
-    with SyncDetector(
+    params = SyncDetectorSummarizerParams(
         sample_rate=args.sample_rate,
+        max_misalignment=communicate.parse_time(args.max_misalignment))
+    with SyncDetector(
+        params=params,
         dont_cache=args.dont_cache) as det:
         result = det.align(
             file_specs,
-            max_misalignment=communicate.parse_time(args.max_misalignment),
             known_delay_map=known_delay_map)
     if args.json:
         print(json.dumps(

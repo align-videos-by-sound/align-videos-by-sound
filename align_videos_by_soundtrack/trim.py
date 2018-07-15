@@ -12,7 +12,7 @@ import sys
 import json
 import logging
 
-from .align import SyncDetector
+from .align import SyncDetector, SyncDetectorSummarizerParams
 from .communicate import (
     parse_time,
     check_call,
@@ -58,10 +58,11 @@ Please see `alignment_info_by_sound_track --help'.""")
     import os
     if not os.path.exists(args.outdir):
         os.mkdir(args.outdir)
+    params = SyncDetectorSummarizerParams(
+        max_misalignment=parse_time(args.max_misalignment))
     with SyncDetector() as sd:
         infos = sd.align(
             files,
-            max_misalignment=parse_time(args.max_misalignment),
             known_delay_map=json.loads(args.known_delay_map))
 
         for fn, editinfo in list(zip(files, infos)):

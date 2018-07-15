@@ -25,7 +25,7 @@ import logging
 
 import numpy as np
 
-from .align import SyncDetector
+from .align import SyncDetector, SyncDetectorSummarizerParams
 from .communicate import (
     parse_time,
     call_ffmpeg_with_filtercomplex,
@@ -304,11 +304,11 @@ def _make_list_of_trims(definition, max_misalignment, known_delay_map):
     inputs, intercuts = _translate_definition(definition)
     files = check_and_decode_filenames(
         [inp["file"] for inp in inputs], exit_if_error=True)
-    with SyncDetector() as sd:
+    params = SyncDetectorSummarizerParams(
+        max_misalignment=parse_time(max_misalignment))
+    with SyncDetector(params=params) as sd:
         einf = sd.align(
-            files,
-            max_misalignment=parse_time(max_misalignment),
-            known_delay_map=known_delay_map)
+            files, known_delay_map=known_delay_map)
 
     #
     qual = SyncDetector.summarize_stream_infos(einf)
