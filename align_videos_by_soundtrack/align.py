@@ -29,6 +29,7 @@ from . import _cache
 
 
 __all__ = [
+    'SyncDetectorParams',
     'SyncDetector',
     'main',
     ]
@@ -36,17 +37,21 @@ __all__ = [
 _logger = logging.getLogger(__name__)
 
 
+class SyncDetectorParams(object):
+    def __init__(self, **kwargs):
+        self.sample_rate = kwargs.get("sample_rate", 48000)
+
+        self.fft_bin_size = kwargs.get("fft_bin_size", 1024)
+        self.overlap = kwargs.get("overlap", 0)
+        self.box_height = kwargs.get("box_height", self.fft_bin_size // 2)
+        self.box_width = kwargs.get("box_width", 43)
+        self.maxes_per_box = kwargs.get("maxes_per_box", 7)
+
+
 class _FreqTransSummarizer(object):
-    def __init__(self,
-                 working_dir,
-                 sample_rate, fft_bin_size, overlap, box_height, box_width, maxes_per_box):
+    def __init__(self, working_dir, params):
         self._working_dir = working_dir
-        self._sample_rate = sample_rate
-        self._fft_bin_size = fft_bin_size
-        self._overlap = overlap
-        self._box_height = box_height
-        self._box_width = box_width
-        self._maxes_per_box = maxes_per_box
+        self._params = params
 
     def _summarize(self, data):
         """
@@ -59,17 +64,18 @@ class _FreqTransSummarizer(object):
         freqs_dict = defaultdict(list)
 
         boxes = defaultdict(list)
-        for x, j in enumerate(range(int(-self._overlap), len(data), int(self._fft_bin_size - self._overlap))):
-            sample_data = data[max(0, j):max(0, j) + self._fft_bin_size]
-            if (len(sample_data) == self._fft_bin_size):  # if there are enough audio points left to create a full fft bin
+        for x, j in enumerate(
+            range(int(-self._params.overlap), len(data), int(self._params.fft_bin_size - self._params.overlap))):
+            sample_data = data[max(0, j):max(0, j) + self._params.fft_bin_size]
+            if (len(sample_data) == self._params.fft_bin_size):  # if there are enough audio points left to create a full fft bin
                 intensities = np.abs(np.fft.fft(sample_data))  # intensities is list of fft results
-                box_x = x // self._box_width
+                box_x = x // self._params.box_width
                 for y in range(len(intensities) // 2):
-                    box_y = y // self._box_height
+                    box_y = y // self._params.box_height
                     # x: corresponding to time
                     # y: corresponding to freq
                     boxes[(box_x, box_y)].append((intensities[y], x, y))
-                    if len(boxes[(box_x, box_y)]) > self._maxes_per_box:
+                    if len(boxes[(box_x, box_y)]) > self._params.maxes_per_box:
                         boxes[(box_x, box_y)].remove(min(boxes[(box_x, box_y)]))
         #
         for box_x, box_y in list(boxes.keys()):
@@ -80,13 +86,13 @@ class _FreqTransSummarizer(object):
         return freqs_dict
 
     def _secs_to_x(self, secs):
-        j = secs * float(self._sample_rate)
-        x = (j + self._overlap) / (self._fft_bin_size - self._overlap)
+        j = secs * float(self._params.sample_rate)
+        x = (j + self._params.overlap) / (self._params.fft_bin_size - self._params.overlap)
         return x
 
     def _x_to_secs(self, x):
-        j = x * (self._fft_bin_size - self._overlap) - self._overlap
-        return float(j) / self._sample_rate
+        j = x * (self._params.fft_bin_size - self._params.overlap) - self._params.overlap
+        return float(j) / self._params.sample_rate
 
     def _summarize_wav(self, wavfile):
         raw_audio, rate = communicate.read_audio(wavfile)
@@ -120,23 +126,19 @@ class _FreqTransSummarizer(object):
             #(fft_bin_size - overlap) / sample_rate
             maxmisal = max_misalignment
             maxmisal += 512 * ((
-                    self._fft_bin_size - self._overlap) / self._sample_rate)
+                    self._params.fft_bin_size - self._params.overlap) / self._params.sample_rate)
             #_logger.debug(maxmisal)
 
         exaud_args = dict(
-            sample_rate=self._sample_rate, video_file=media,
+            sample_rate=self._params.sample_rate, video_file=media,
             duration=maxmisal,
             afilter=afilter)
         # First, try getting from cache.
         ck = None
         if not dont_cache:
             for_cache = dict(exaud_args)
+            for_cache.update(self._params.__dict__)
             for_cache.update(dict(
-                    fft_bin_size=self._fft_bin_size,
-                    overlap=self._overlap,
-                    box_height=self._box_height,
-                    box_width=self._box_width,
-                    maxes_per_box=self._maxes_per_box,
                     atime=os.path.getatime(media)
                     ))
             ck = _cache.make_cache_key(**for_cache)
@@ -287,10 +289,14 @@ class SyncDetector(object):
         """
         Find time delays between video files
         """
-        freqsum = _FreqTransSummarizer(
-            self._working_dir,
-            self._sample_rate,
-            fft_bin_size, overlap, box_height, box_width, maxes_per_box)
+        params = SyncDetectorParams(
+            sample_rate=self._sample_rate,
+            fft_bin_size=fft_bin_size,
+            overlap=overlap,
+            box_height=box_height,
+            box_width=box_width,
+            maxes_per_box=maxes_per_box)
+        freqsum = _FreqTransSummarizer(self._working_dir, params)
         pad_pre, trim_pre = self._align(
             freqsum, files, max_misalignment, known_delay_map, afilter)
         #
