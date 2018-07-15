@@ -12,24 +12,11 @@ the python libraries scipy and numpy.
 from __future__ import unicode_literals
 from __future__ import absolute_import
 
-_doc_template = '''
-    %(prog)s <file1> <file2>
-
-This program reports the offset difference for audio and video files,
-containing audio recordings from the same event. It relies on ffmpeg being
-installed and the python libraries scipy and numpy.
-
-It reports back the offset. Example:
-
-    %(prog)s good_video_shitty_audio.mp4 good_audio_shitty_video.mp4
-
-    Result: The beginning of good_video_shitty_audio.mp4 needs to be trimmed off 11.348 seconds for all files to be in sync
-
-'''
 import os
 import sys
 from collections import defaultdict
 import math
+import json
 import tempfile
 import shutil
 import logging
@@ -335,15 +322,17 @@ class SyncDetector(object):
 
 
 def _bailout(parser):
-    parser.print_usage()
+    parser.print_help()
     sys.exit(1)
 
 
 def main(args=sys.argv):
     import argparse
-    import json
 
-    parser = argparse.ArgumentParser(prog=args[0], usage=_doc_template)
+    parser = argparse.ArgumentParser(description="""\
+This program reports the offset difference for audio and video files,
+containing audio recordings from the same event. It relies on ffmpeg being
+installed and the python libraries scipy and numpy.""")
     parser.add_argument(
         '--max_misalignment',
         type=str, default="1800",
