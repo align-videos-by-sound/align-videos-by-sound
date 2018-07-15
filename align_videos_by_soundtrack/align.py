@@ -224,6 +224,7 @@ class _FreqTransSummarizer(object):
             afilter=self._params.afilter)
 
     def summarize_audiotrack(self, media, dont_cache):
+        _logger.info("for '%s' begin", os.path.basename(media))
         exaud_args = dict(video_file=media, duration=self._params.max_misalignment)
         # First, try getting from cache.
         ck = None
@@ -236,15 +237,19 @@ class _FreqTransSummarizer(object):
             ck = _cache.make_cache_key(**for_cache)
             cv = _cache.get("_align", ck)
             if cv:
+                _logger.info("for '%s' end", os.path.basename(media))
                 return cv[1]
         else:
             _cache.clean("_align")
 
         # Not found in cache.
+        _logger.info("extracting audio tracks for '%s' begin", os.path.basename(media))
         wavfile = self._extract_audio(**exaud_args)
+        _logger.info("extracting audio tracks for '%s' end", os.path.basename(media))
         rate, ft_dict = self._summarize_wav(wavfile)
         if not dont_cache:
             _cache.set("_align", ck, (rate, ft_dict))
+        _logger.info("for '%s' end", os.path.basename(media))
         return ft_dict
 
     def find_delay(
