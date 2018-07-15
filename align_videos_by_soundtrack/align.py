@@ -136,7 +136,7 @@ class SyncDetector(object):
             self._orig_infos[fn] = communicate.get_media_info(fn)
         return self._orig_infos[fn]
 
-    def _align(self, sample_rate, files, fft_bin_size, overlap, box_height, box_width, samples_per_box,
+    def _align(self, sample_rate, files, fft_bin_size, overlap, box_height, box_width, maxes_per_box,
                max_misalignment, known_delay_map, afilter):
         """
         Find time delays between video files
@@ -169,7 +169,7 @@ class SyncDetector(object):
                         overlap=overlap,
                         box_height=box_height,
                         box_width=box_width,
-                        samples_per_box=samples_per_box,
+                        maxes_per_box=maxes_per_box,
                         atime=os.path.getatime(files[idx])
                         ))
                 ck = _cache.make_cache_key(**for_cache)
@@ -185,7 +185,7 @@ class SyncDetector(object):
             ft_dict = _mk_freq_trans_summary(
                 raw_audio,
                 fft_bin_size, overlap,
-                box_height, box_width, samples_per_box)  # bins, overlap, box height, box width
+                box_height, box_width, maxes_per_box)  # bins, overlap, box height, box width
             del raw_audio
             if not self._dont_cache:
                 _cache.set("_align", ck, (rate, ft_dict))
@@ -251,13 +251,13 @@ class SyncDetector(object):
         """
         return [self._get_media_info(fn) for fn in files]
 
-    def align(self, files, fft_bin_size=1024, overlap=0, box_height=512, box_width=43, samples_per_box=7,
+    def align(self, files, fft_bin_size=1024, overlap=0, box_height=512, box_width=43, maxes_per_box=7,
               max_misalignment=0, known_delay_map={}, afilter=""):
         """
         Find time delays between video files
         """
         pad_pre, trim_pre = self._align(
-            self._sample_rate, files, fft_bin_size, overlap, box_height, box_width, samples_per_box,
+            self._sample_rate, files, fft_bin_size, overlap, box_height, box_width, maxes_per_box,
             max_misalignment, known_delay_map, afilter)
         #
         infos = self.get_media_info(files)
