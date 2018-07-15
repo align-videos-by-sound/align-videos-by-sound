@@ -131,7 +131,7 @@ class SyncDetector(object):
                 retry -= 1
                 time.sleep(1)
 
-    def _extract_audio(self, sample_rate, video_file, duration):
+    def _extract_audio(self, sample_rate, video_file, duration, afilter):
         """
         Extract audio from video file, save as wav auido file
 
@@ -141,7 +141,8 @@ class SyncDetector(object):
         return communicate.media_to_mono_wave(
             video_file, self._working_dir,
             duration=duration,
-            sample_rate=sample_rate)
+            sample_rate=sample_rate,
+            afilter=afilter)
 
     def _get_media_info(self, fn):
         if fn not in self._orig_infos:
@@ -149,7 +150,7 @@ class SyncDetector(object):
         return self._orig_infos[fn]
 
     def _align(self, sample_rate, files, fft_bin_size, overlap, box_height, box_width, samples_per_box,
-               max_misalignment, known_delay_map):
+               max_misalignment, known_delay_map, afilter):
         """
         Find time delays between video files
         """
@@ -170,7 +171,8 @@ class SyncDetector(object):
 
             exaud_args = dict(
                 sample_rate=sample_rate, video_file=files[idx],
-                duration=maxmisal)
+                duration=maxmisal,
+                afilter=afilter)
             # First, try getting from cache.
             ck = None
             if not self._dont_cache:
@@ -263,13 +265,13 @@ class SyncDetector(object):
         return [self._get_media_info(fn) for fn in files]
 
     def align(self, files, fft_bin_size=1024, overlap=0, box_height=512, box_width=43, samples_per_box=7,
-              max_misalignment=0, known_delay_map={}):
+              max_misalignment=0, known_delay_map={}, afilter=""):
         """
         Find time delays between video files
         """
         pad_pre, trim_pre = self._align(
             self._sample_rate, files, fft_bin_size, overlap, box_height, box_width, samples_per_box,
-            max_misalignment, known_delay_map)
+            max_misalignment, known_delay_map, afilter)
         #
         infos = self.get_media_info(files)
         orig_dur = np.array([inf["duration"] for inf in infos])
