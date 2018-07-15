@@ -36,65 +36,152 @@ __all__ = [
 _logger = logging.getLogger(__name__)
 
 
-def _mk_freq_trans_summary(data, fft_bin_size, overlap, box_height, box_width, maxes_per_box):
-    """
-    Return characteristic frequency transition's summary.
+class _FreqTransSummarizer(object):
+    def __init__(self,
+                 working_dir,
+                 sample_rate, fft_bin_size, overlap, box_height, box_width, maxes_per_box):
+        self._working_dir = working_dir
+        self._sample_rate = sample_rate
+        self._fft_bin_size = fft_bin_size
+        self._overlap = overlap
+        self._box_height = box_height
+        self._box_width = box_width
+        self._maxes_per_box = maxes_per_box
 
-    The dictionaries to be returned are as follows:
-    * key: The frequency appearing as a peak in any time zone.
-    * value: A list of the times at which specific frequencies occurred.
-    """
-    freqs_dict = defaultdict(list)
+    def _summarize(self, data):
+        """
+        Return characteristic frequency transition's summary.
+    
+        The dictionaries to be returned are as follows:
+        * key: The frequency appearing as a peak in any time zone.
+        * value: A list of the times at which specific frequencies occurred.
+        """
+        freqs_dict = defaultdict(list)
 
-    boxes = defaultdict(list)
-    for x, j in enumerate(range(int(-overlap), len(data), int(fft_bin_size - overlap))):
-        sample_data = data[max(0, j):max(0, j) + fft_bin_size]
-        if (len(sample_data) == fft_bin_size):  # if there are enough audio points left to create a full fft bin
-            intensities = np.abs(np.fft.fft(sample_data))  # intensities is list of fft results
-            box_x = x // box_width
-            for y in range(len(intensities) // 2):
-                box_y = y // box_height
-                # x: corresponding to time
-                # y: corresponding to freq
-                boxes[(box_x, box_y)].append((intensities[y], x, y))
-                if len(boxes[(box_x, box_y)]) > maxes_per_box:
-                    boxes[(box_x, box_y)].remove(min(boxes[(box_x, box_y)]))
-    #
-    for box_x, box_y in list(boxes.keys()):
-        for intensity, x, y in boxes[(box_x, box_y)]:
-            freqs_dict[y].append(x)
+        boxes = defaultdict(list)
+        for x, j in enumerate(range(int(-self._overlap), len(data), int(self._fft_bin_size - self._overlap))):
+            sample_data = data[max(0, j):max(0, j) + self._fft_bin_size]
+            if (len(sample_data) == self._fft_bin_size):  # if there are enough audio points left to create a full fft bin
+                intensities = np.abs(np.fft.fft(sample_data))  # intensities is list of fft results
+                box_x = x // self._box_width
+                for y in range(len(intensities) // 2):
+                    box_y = y // self._box_height
+                    # x: corresponding to time
+                    # y: corresponding to freq
+                    boxes[(box_x, box_y)].append((intensities[y], x, y))
+                    if len(boxes[(box_x, box_y)]) > self._maxes_per_box:
+                        boxes[(box_x, box_y)].remove(min(boxes[(box_x, box_y)]))
+        #
+        for box_x, box_y in list(boxes.keys()):
+            for intensity, x, y in boxes[(box_x, box_y)]:
+                freqs_dict[y].append(x)
 
-    del boxes
-    return freqs_dict
+        del boxes
+        return freqs_dict
 
+    def _secs_to_x(self, secs):
+        j = secs * float(self._sample_rate)
+        x = (j + self._overlap) / (self._fft_bin_size - self._overlap)
+        return x
 
-def _find_delay(
-    freqs_dict_orig, freqs_dict_sample,
-    min_delay=float('nan'),
-    max_delay=float('nan')):
-    #
-    keys = set(freqs_dict_sample.keys()) & set(freqs_dict_orig.keys())
-    #
-    if not keys:
-        raise Exception(
-            """I could not find a match. Consider giving a large value to \
+    def _x_to_secs(self, x):
+        j = x * (self._fft_bin_size - self._overlap) - self._overlap
+        return float(j) / self._sample_rate
+
+    def _summarize_wav(self, wavfile):
+        raw_audio, rate = communicate.read_audio(wavfile)
+        result = self._summarize(raw_audio)
+        del raw_audio
+        return rate, result
+
+    def _extract_audio(self, sample_rate, video_file, duration, afilter):
+        """
+        Extract audio from video file, save as wav auido file
+
+        INPUT: Video file, and its index of input file list
+        OUTPUT: Does not return any values, but saves audio as wav file
+        """
+        return communicate.media_to_mono_wave(
+            video_file, self._working_dir,
+            duration=duration,
+            sample_rate=sample_rate,
+            afilter=afilter)
+
+    def summarize_audiotrack(self, media, dont_cache, max_misalignment, afilter):
+        maxmisal = 0
+        if max_misalignment:
+            # max_misalignment only cuts out the media. After cutting out,
+            # we need to decide how much to investigate, If there really is
+            # a delay close to max_misalignment indefinitely, for true delay
+            # detection, it is necessary to cut out and investigate it with
+            # a value slightly larger than max_misalignment. This can be
+            # thought of as how many loops in _FreqTransSummarizer#summarize
+            # should be minimized.
+            #(fft_bin_size - overlap) / sample_rate
+            maxmisal = max_misalignment
+            maxmisal += 512 * ((
+                    self._fft_bin_size - self._overlap) / self._sample_rate)
+            #_logger.debug(maxmisal)
+
+        exaud_args = dict(
+            sample_rate=self._sample_rate, video_file=media,
+            duration=maxmisal,
+            afilter=afilter)
+        # First, try getting from cache.
+        ck = None
+        if not dont_cache:
+            for_cache = dict(exaud_args)
+            for_cache.update(dict(
+                    fft_bin_size=self._fft_bin_size,
+                    overlap=self._overlap,
+                    box_height=self._box_height,
+                    box_width=self._box_width,
+                    maxes_per_box=self._maxes_per_box,
+                    atime=os.path.getatime(media)
+                    ))
+            ck = _cache.make_cache_key(**for_cache)
+            cv = _cache.get("_align", ck)
+            if cv:
+                return cv[1]
+        else:
+            _cache.clean("_align")
+
+        # Not found in cache.
+        wavfile = self._extract_audio(**exaud_args)
+        rate, ft_dict = self._summarize_wav(wavfile)
+        if not dont_cache:
+            _cache.set("_align", ck, (rate, ft_dict))
+        return ft_dict
+
+    def find_delay(
+        self,
+        freqs_dict_orig, freqs_dict_sample,
+        min_delay=float('nan'),
+        max_delay=float('nan')):
+        #
+        min_delay, max_delay = self._secs_to_x(min_delay), self._secs_to_x(max_delay)
+        keys = set(freqs_dict_sample.keys()) & set(freqs_dict_orig.keys())
+        #
+        if not keys:
+            raise Exception(
+                """I could not find a match. Consider giving a large value to \
 "max_misalignment" if the target medias are sure to shoot the same event.""")
-    #
-    t_diffs = defaultdict(int)
-    for key in keys:
-        for x_i in freqs_dict_sample[key]:  # determine time offset
-            for x_j in freqs_dict_orig[key]:
-                delta_t = x_i - x_j
-                mincond_ok = math.isnan(min_delay) or delta_t >= min_delay
-                maxcond_ok = math.isnan(max_delay) or delta_t <= max_delay
-                inc = 1 if mincond_ok and maxcond_ok else 0
-                t_diffs[delta_t] += inc
+        #
+        t_diffs = defaultdict(int)
+        for key in keys:
+            for x_i in freqs_dict_sample[key]:  # determine time offset
+                for x_j in freqs_dict_orig[key]:
+                    delta_t = x_i - x_j
+                    mincond_ok = math.isnan(min_delay) or delta_t >= min_delay
+                    maxcond_ok = math.isnan(max_delay) or delta_t <= max_delay
+                    inc = 1 if mincond_ok and maxcond_ok else 0
+                    t_diffs[delta_t] += inc
+    
+        t_diffs_sorted = sorted(list(t_diffs.items()), key=lambda x: x[1])
+        # _logger.debug(t_diffs_sorted)
+        time_delay = t_diffs_sorted[-1][0]
 
-    t_diffs_sorted = sorted(list(t_diffs.items()), key=lambda x: x[1])
-    # _logger.debug(t_diffs_sorted)
-    time_delay = t_diffs_sorted[-1][0]
-
-    return time_delay
+        return self._x_to_secs(time_delay)
 
 
 class SyncDetector(object):
@@ -118,80 +205,19 @@ class SyncDetector(object):
                 retry -= 1
                 time.sleep(1)
 
-    def _extract_audio(self, sample_rate, video_file, duration, afilter):
-        """
-        Extract audio from video file, save as wav auido file
-
-        INPUT: Video file, and its index of input file list
-        OUTPUT: Does not return any values, but saves audio as wav file
-        """
-        return communicate.media_to_mono_wave(
-            video_file, self._working_dir,
-            duration=duration,
-            sample_rate=sample_rate,
-            afilter=afilter)
-
     def _get_media_info(self, fn):
         if fn not in self._orig_infos:
             self._orig_infos[fn] = communicate.get_media_info(fn)
         return self._orig_infos[fn]
 
-    def _align(self, sample_rate, files, fft_bin_size, overlap, box_height, box_width, maxes_per_box,
-               max_misalignment, known_delay_map, afilter):
+    def _align(self, freqsum, files, max_misalignment, known_delay_map, afilter):
         """
         Find time delays between video files
         """
         def _each(idx):
-            maxmisal = 0
-            if max_misalignment:
-                # max_misalignment only cuts out the media. After cutting out,
-                # we need to decide how much to investigate, If there really is
-                # a delay close to max_misalignment indefinitely, for true delay
-                # detection, it is necessary to cut out and investigate it with
-                # a value slightly larger than max_misalignment. This can be
-                # thought of as how many loops in _mk_freq_trans_summary should
-                # be minimized.
-                #(fft_bin_size - overlap) / sample_rate
-                maxmisal = max_misalignment
-                maxmisal += 512 * ((fft_bin_size - overlap) / sample_rate)
-                #_logger.debug(maxmisal)
-
-            exaud_args = dict(
-                sample_rate=sample_rate, video_file=files[idx],
-                duration=maxmisal,
-                afilter=afilter)
-            # First, try getting from cache.
-            ck = None
-            if not self._dont_cache:
-                for_cache = dict(exaud_args)
-                for_cache.update(dict(
-                        fft_bin_size=fft_bin_size,
-                        overlap=overlap,
-                        box_height=box_height,
-                        box_width=box_width,
-                        maxes_per_box=maxes_per_box,
-                        atime=os.path.getatime(files[idx])
-                        ))
-                ck = _cache.make_cache_key(**for_cache)
-                cv = _cache.get("_align", ck)
-                if cv:
-                    return cv[1]
-            else:
-                _cache.clean("_align")
-
-            # Not found in cache.
-            wavfile = self._extract_audio(**exaud_args)
-            raw_audio, rate = communicate.read_audio(wavfile)
-            ft_dict = _mk_freq_trans_summary(
-                raw_audio,
-                fft_bin_size, overlap,
-                box_height, box_width, maxes_per_box)  # bins, overlap, box height, box width
-            del raw_audio
-            if not self._dont_cache:
-                _cache.set("_align", ck, (rate, ft_dict))
-            return ft_dict
+            return freqsum.summarize_audiotrack(
+                files[idx], self._dont_cache, max_misalignment, afilter)
         #
-        samps_per_sec = self._sample_rate / float(fft_bin_size)
         ftds = {i: _each(i) for i in range(len(files))}
         _result1, _result2 = {}, {}
         for kdm_key in known_delay_map.keys():
@@ -201,11 +227,8 @@ class SyncDetector(object):
                 ib = files.index(os.path.abspath(kdm["base"]))
             except ValueError:  # simply ignore
                 continue
-            delay = _find_delay(
-                ftds[ib], ftds[it],
-                kdm.get("min", float("nan")) * samps_per_sec,
-                kdm.get("max", float("nan")) * samps_per_sec)
-            _result1[(ib, it)] = -delay / samps_per_sec
+            _result1[(ib, it)] = -freqsum.find_delay(
+                ftds[ib], ftds[it], kdm.get("min"), kdm.get("max"))
         #
         _result2[(0, 0)] = 0.0
         for i in range(len(files) - 1):
@@ -214,8 +237,7 @@ class SyncDetector(object):
             elif (i + 1, 0) in _result1:
                 _result2[(0, i + 1)] = -_result1[(i + 1, 0)]
             else:
-                delay = _find_delay(ftds[0], ftds[i + 1])
-                _result2[(0, i + 1)] = -delay / samps_per_sec
+                _result2[(0, i + 1)] = -freqsum.find_delay(ftds[0], ftds[i + 1])
         #        [0, 1], [0, 2], [0, 3]
         # known: [1, 2]
         # _______________^^^^^^[0, 2] must be calculated by [0, 1], and [1, 2]
@@ -251,14 +273,26 @@ class SyncDetector(object):
         """
         return [self._get_media_info(fn) for fn in files]
 
-    def align(self, files, fft_bin_size=1024, overlap=0, box_height=512, box_width=43, maxes_per_box=7,
-              max_misalignment=0, known_delay_map={}, afilter=""):
+    def align(
+        self,
+        files,
+        fft_bin_size=1024,
+        overlap=0,
+        box_height=512,
+        box_width=43,
+        maxes_per_box=7,
+        max_misalignment=0,
+        known_delay_map={},
+        afilter=""):
         """
         Find time delays between video files
         """
+        freqsum = _FreqTransSummarizer(
+            self._working_dir,
+            self._sample_rate,
+            fft_bin_size, overlap, box_height, box_width, maxes_per_box)
         pad_pre, trim_pre = self._align(
-            self._sample_rate, files, fft_bin_size, overlap, box_height, box_width, maxes_per_box,
-            max_misalignment, known_delay_map, afilter)
+            freqsum, files, max_misalignment, known_delay_map, afilter)
         #
         infos = self.get_media_info(files)
         orig_dur = np.array([inf["duration"] for inf in infos])
