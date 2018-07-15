@@ -188,7 +188,9 @@ class _FreqTransSummarizer(object):
 class SyncDetector(object):
     def __init__(self, sample_rate=48000, dont_cache=False):
         self._working_dir = tempfile.mkdtemp()
-        self._sample_rate = sample_rate
+        self._impl = _FreqTransSummarizer(
+            self._working_dir,
+            SyncDetectorParams(sample_rate=sample_rate))
         self._dont_cache = dont_cache
         self._orig_infos = {}  # per filename
 
@@ -211,12 +213,12 @@ class SyncDetector(object):
             self._orig_infos[fn] = communicate.get_media_info(fn)
         return self._orig_infos[fn]
 
-    def _align(self, freqsum, files, max_misalignment, known_delay_map):
+    def _align(self, files, max_misalignment, known_delay_map):
         """
         Find time delays between video files
         """
         def _each(idx):
-            return freqsum.summarize_audiotrack(
+            return self._impl.summarize_audiotrack(
                 files[idx], self._dont_cache, max_misalignment)
         #
         ftds = {i: _each(i) for i in range(len(files))}
@@ -228,7 +230,7 @@ class SyncDetector(object):
                 ib = files.index(os.path.abspath(kdm["base"]))
             except ValueError:  # simply ignore
                 continue
-            _result1[(ib, it)] = -freqsum.find_delay(
+            _result1[(ib, it)] = -self._impl.find_delay(
                 ftds[ib], ftds[it], kdm.get("min"), kdm.get("max"))
         #
         _result2[(0, 0)] = 0.0
@@ -238,7 +240,7 @@ class SyncDetector(object):
             elif (i + 1, 0) in _result1:
                 _result2[(0, i + 1)] = -_result1[(i + 1, 0)]
             else:
-                _result2[(0, i + 1)] = -freqsum.find_delay(ftds[0], ftds[i + 1])
+                _result2[(0, i + 1)] = -self._impl.find_delay(ftds[0], ftds[i + 1])
         #        [0, 1], [0, 2], [0, 3]
         # known: [1, 2]
         # _______________^^^^^^[0, 2] must be calculated by [0, 1], and [1, 2]
@@ -275,30 +277,12 @@ class SyncDetector(object):
         return [self._get_media_info(fn) for fn in files]
 
     def align(
-        self,
-        files,
-        fft_bin_size=1024,
-        overlap=0,
-        box_height=512,
-        box_width=43,
-        maxes_per_box=7,
-        max_misalignment=0,
-        known_delay_map={},
-        afilter=""):
+        self, files, max_misalignment=0, known_delay_map={}):
         """
         Find time delays between video files
         """
-        params = SyncDetectorParams(
-            sample_rate=self._sample_rate,
-            fft_bin_size=fft_bin_size,
-            overlap=overlap,
-            box_height=box_height,
-            box_width=box_width,
-            maxes_per_box=maxes_per_box,
-            afilter=afilter)
-        freqsum = _FreqTransSummarizer(self._working_dir, params)
         pad_pre, trim_pre = self._align(
-            freqsum, files, max_misalignment, known_delay_map)
+            files, max_misalignment, known_delay_map)
         #
         infos = self.get_media_info(files)
         orig_dur = np.array([inf["duration"] for inf in infos])
