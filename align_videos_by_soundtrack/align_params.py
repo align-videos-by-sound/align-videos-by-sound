@@ -90,8 +90,8 @@ class SyncDetectorSummarizerParams(object):
     def __init__(self, **kwargs):
         self.sample_rate = kwargs.get("sample_rate", 48000)
 
-        self.fft_bin_size = kwargs.get("fft_bin_size", 1024)
-        self.overlap = kwargs.get("overlap", 0)
+        self.fft_bin_size = kwargs.get("fft_bin_size", 1024*3)
+        self.overlap = kwargs.get("overlap", 1024*2)
         self.box_height = kwargs.get("box_height", self.fft_bin_size // 2)
         self.box_width = kwargs.get("box_width", 43)
         self.maxes_per_box = kwargs.get("maxes_per_box", 7)
