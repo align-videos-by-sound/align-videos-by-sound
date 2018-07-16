@@ -355,6 +355,10 @@ class SyncDetector(object):
         # build result
         result = np.array([_result2[k] for k in sorted(_result2.keys())])
         pad_pre = result - result.min()
+        _logger.debug(
+            list(zip(
+                    map(os.path.basename, files),
+                    ["%.3f" % pp for pp in pad_pre])))  #
         trim_pre = -(pad_pre - pad_pre.max())
         #
         return pad_pre, trim_pre
