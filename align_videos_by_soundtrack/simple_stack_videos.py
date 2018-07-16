@@ -136,7 +136,7 @@ def _build(args):
     #
     with SyncDetector(
         params=args.summarizer_params,
-        dont_cache=args.dont_cache) as det:
+        clear_cache=args.clear_cache) as det:
 
         ares = det.align(
             files,

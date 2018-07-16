@@ -91,10 +91,11 @@ Specify the adjustment as to which media is adjusted to "base", the minimum and
 maximum delay as "min", "max". The values of "min", "max"
 are the number of seconds.''')
         self.add_argument(
-            '--dont_cache',
+            '--clear_cache',
             action="store_true",
-            help='''Normally, this script stores the result in cache ("%s"). \
-If you hate this behaviour, specify this option.''' % (
+            help='''Normally, this script stores the result in cache ("%s")
+and use it if it already exists in cache. If you want to clear the cache
+for some reason, specify this.''' % (
                 _cache.cache_root_dir))
 
     # ---------------------------------------

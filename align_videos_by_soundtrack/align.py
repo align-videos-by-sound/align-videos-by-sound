@@ -117,32 +117,27 @@ class _FreqTransSummarizer(object):
             sample_rate=self._params.sample_rate,
             afilter=self._params.afilter)
 
-    def summarize_audiotrack(self, media, dont_cache):
+    def summarize_audiotrack(self, media):
         _logger.info("for '%s' begin", os.path.basename(media))
         exaud_args = dict(video_file=media, duration=self._params.max_misalignment)
         # First, try getting from cache.
-        ck = None
-        if not dont_cache:
-            for_cache = dict(exaud_args)
-            for_cache.update(self._params.__dict__)
-            for_cache.update(dict(
-                    atime=os.path.getatime(media)
-                    ))
-            ck = _cache.make_cache_key(**for_cache)
-            cv = _cache.get("_align", ck)
-            if cv:
-                _logger.info("for '%s' end", os.path.basename(media))
-                return cv[1]
-        else:
-            _cache.clean("_align")
+        for_cache = dict(exaud_args)
+        for_cache.update(self._params.__dict__)
+        for_cache.update(dict(
+                atime=os.path.getatime(media)
+                ))
+        ck = _cache.make_cache_key(**for_cache)
+        cv = _cache.get("_align", ck)
+        if cv:
+            _logger.info("for '%s' end", os.path.basename(media))
+            return cv[1]
 
         # Not found in cache.
         _logger.info("extracting audio tracks for '%s' begin", os.path.basename(media))
         wavfile = self._extract_audio(**exaud_args)
         _logger.info("extracting audio tracks for '%s' end", os.path.basename(media))
         rate, ft_dict = self._summarize_wav(wavfile)
-        if not dont_cache:
-            _cache.set("_align", ck, (rate, ft_dict))
+        _cache.set("_align", ck, (rate, ft_dict))
         _logger.info("for '%s' end", os.path.basename(media))
         return ft_dict
 
@@ -178,12 +173,13 @@ class _FreqTransSummarizer(object):
 
 
 class SyncDetector(object):
-    def __init__(self, params=SyncDetectorSummarizerParams(), dont_cache=False):
+    def __init__(self, params=SyncDetectorSummarizerParams(), clear_cache=False):
         self._working_dir = tempfile.mkdtemp()
         self._impl = _FreqTransSummarizer(
             self._working_dir, params)
-        self._dont_cache = dont_cache
         self._orig_infos = {}  # per filename
+        if clear_cache:
+            _cache.clean("_align")
 
     def __enter__(self):
         return self
@@ -209,8 +205,7 @@ class SyncDetector(object):
         Find time delays between video files
         """
         def _each(idx):
-            return self._impl.summarize_audiotrack(
-                files[idx], self._dont_cache)
+            return self._impl.summarize_audiotrack(files[idx])
         #
         ftds = {i: _each(i) for i in range(len(files))}
         _result1, _result2 = {}, {}
@@ -371,7 +366,7 @@ It is possible to pass any media that ffmpeg can handle.',)
         _bailout(parser)
     with SyncDetector(
         params=args.summarizer_params,
-        dont_cache=args.dont_cache) as det:
+        clear_cache=args.clear_cache) as det:
         result = det.align(
             file_specs,
             known_delay_map=known_delay_map)

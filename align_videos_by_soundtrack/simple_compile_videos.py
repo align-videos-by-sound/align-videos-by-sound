@@ -304,7 +304,9 @@ def _make_list_of_trims(definition, known_delay_map, summarizer_params):
     inputs, intercuts = _translate_definition(definition)
     files = check_and_decode_filenames(
         [inp["file"] for inp in inputs], exit_if_error=True)
-    with SyncDetector(params=summarizer_params) as sd:
+    with SyncDetector(
+        params=summarizer_params,
+        clear_cache=args.clear_cache) as sd:
         einf = sd.align(files, known_delay_map=known_delay_map)
 
     #

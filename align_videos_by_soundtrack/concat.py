@@ -47,7 +47,7 @@ def _build(args):
     einf = []
     with SyncDetector(
         params=args.summarizer_params,
-        dont_cache=args.dont_cache) as sd:
+        clear_cache=args.clear_cache) as sd:
 
         start = 0
         upd = base not in known_delay_map
