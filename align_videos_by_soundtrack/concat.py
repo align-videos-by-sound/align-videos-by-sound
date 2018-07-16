@@ -162,14 +162,12 @@ the default is "pad", assuming your goal is to fill in the leading gap.""")
     cli_common.logger_config()
 
     files, fc, vmap, amap = _build(args)
-    v_extra_ffargs = args.v_extra_ffargs if vmap else []
-    a_extra_ffargs = args.a_extra_ffargs if amap else []
     call_ffmpeg_with_filtercomplex(
         args.mode,
         files,
         fc,
-        v_extra_ffargs + a_extra_ffargs,
-        zip(vmap, amap),
+        vmap, amap,
+        args.v_extra_ffargs, args.a_extra_ffargs,
         [args.outfile])
 
 

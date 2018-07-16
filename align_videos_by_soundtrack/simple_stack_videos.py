@@ -241,8 +241,6 @@ it takes from max sample rate of input medias. (default: %(default)d)")
     cli_common.logger_config()
     
     files, fc, (vmap, amap) = _build(args)
-    v_extra_ffargs = args.v_extra_ffargs if vmap else []
-    a_extra_ffargs = args.a_extra_ffargs if amap else []
     if args.video_mode == 'indivisual' or args.audio_mode == 'indivisual':
         outbase, outext = os.path.splitext(args.outfile)
         outfiles = ["{}_{:02d}{}".format(outbase, i, outext)
@@ -254,8 +252,8 @@ it takes from max sample rate of input medias. (default: %(default)d)")
         args.mode,
         files,
         fc,
-        v_extra_ffargs + a_extra_ffargs,
-        zip(vmap, amap),
+        vmap, amap,
+        args.v_extra_ffargs, args.a_extra_ffargs,
         outfiles)
 
 

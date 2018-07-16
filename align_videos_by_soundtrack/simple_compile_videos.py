@@ -690,14 +690,12 @@ position.")
     files, fc, vmap, amap = build(
         json_load(args.definition),
         args.known_delay_map, args.summarizer_params, args.clear_cache)
-    v_extra_ffargs = args.v_extra_ffargs if vmap else []
-    a_extra_ffargs = args.a_extra_ffargs if amap else []
     call_ffmpeg_with_filtercomplex(
         args.mode,
         files,
         fc,
-        v_extra_ffargs + a_extra_ffargs,
-        zip(vmap, amap) if vmap else [amap],
+        vmap, amap,
+        args.v_extra_ffargs, args.a_extra_ffargs,
         [args.outfile])
 
 
