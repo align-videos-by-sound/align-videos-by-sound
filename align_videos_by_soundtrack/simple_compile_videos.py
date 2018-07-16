@@ -110,7 +110,15 @@ _sample_editinfo = """\
              * If audio_mode is "select", you can specify "main", "sub", or
              * idx directly like [1].
              */
-            "audio_mode_params": ["main"]
+            "audio_mode_params": ["main"],
+
+            /*
+             * Apart from the "inputs" filter, extra_filter can be used
+             * for every "intercuts". In particular, sometimes you often
+             * want to use the "pan" filter after "amerge".
+             */
+            "v_extra_filter": "edgedetect",
+            "a_extra_filter": ""
         },
         {
             "sub_idx": 2,
@@ -143,7 +151,10 @@ _sample_editinfo = """\
              * If audio_mode is "amerge" or "amix", you can specify like
              * [1, 2, 3] or ["main", "sub"], etc.
              */
-            "audio_mode_params": [1, 2]
+            "audio_mode_params": [1, 2],
+
+            "v_extra_filter": "",
+            "a_extra_filter": "pan=stereo|c0<c0+c2|c1<c1+c3"
         },
         {
             "sub_idx": 2,
@@ -245,6 +256,11 @@ def _make_list_of_trims(definition, known_delay_map, summarizer_params, clear_ca
                     "video_mode_params", []),
                 "audio_mode_params": _intercuts[i].get(
                     "audio_mode_params", ["main"]),
+
+                "v_extra_filter": _intercuts[i].get(
+                    "v_extra_filter", ""),
+                "a_extra_filter": _intercuts[i].get(
+                    "a_extra_filter", ""),
                 }
             intercuts.append(ins)
 
@@ -334,7 +350,8 @@ def _make_list_of_trims(definition, known_delay_map, summarizer_params, clear_ca
         trims_list.append({
                 k: ins[k] for k in (
                     "video_mode", "video_mode_params",
-                    "audio_mode", "audio_mode_params")
+                    "audio_mode", "audio_mode_params",
+                    "v_extra_filter", "a_extra_filter")
                 })
         # [[idx, start, end], ...]
         trims = []
@@ -521,14 +538,16 @@ def build(definition, known_delay_map, summarizer_params, clear_cache):
                     vfilt = ins["video_mode_params"][0]["blend"]
                 fovl.iv.append(fvs[0].ov[0])
                 fovl.iv.append(fvs[1].ov[0])
-    
+
                 fovl.add_filter(ins["video_mode"], vfilt)
+                fovl.add_filter(ins.get("v_extra_filter"))
                 fovl.append_outlabel_v()
                 fconcat.iv.append(fovl.ov[0])
                 result_fg.append(fvs[0].to_str())
                 result_fg.append(fvs[1].to_str())
                 result_fg.append(fovl.to_str())
             else:
+                fvs[0].add_filter(ins.get("v_extra_filter"))
                 fconcat.iv.append(fvs[0].ov[0])
                 result_fg.append(fvs[0].to_str())
         #
@@ -543,12 +562,14 @@ def build(definition, known_delay_map, summarizer_params, clear_cache):
             for fa in fas:
                 fam.ia.append(fa.oa[0])
             fam.add_filter(ins["audio_mode"], inputs=len(fas))
+            fam.add_filter(ins.get("a_extra_filter"))
             fam.append_outlabel_a()
             for fa in fas:
                 result_fg.append(fa.to_str())
             result_fg.append(fam.to_str())
             fconcat.ia.append(fam.oa[0])
         else:
+            fas[0].add_filter(ins.get("a_extra_filter"))
             result_fg.append(fas[0].to_str())
             fconcat.ia.append(fas[0].oa[0])
 
