@@ -221,7 +221,7 @@ def validate_definition(definition):
             sys.exit(1)
 
 
-def _make_list_of_trims(definition, known_delay_map, args):
+def _make_list_of_trims(definition, known_delay_map, summarizer_params):
     #
     def _translate_definition(definition):
         _inputs = definition["inputs"]  # as human readable
@@ -304,8 +304,7 @@ def _make_list_of_trims(definition, known_delay_map, args):
     inputs, intercuts = _translate_definition(definition)
     files = check_and_decode_filenames(
         [inp["file"] for inp in inputs], exit_if_error=True)
-    params = SyncDetectorSummarizerParams.from_json(args.summarizer_params)
-    with SyncDetector(params=params) as sd:
+    with SyncDetector(params=summarizer_params) as sd:
         einf = sd.align(files, known_delay_map=known_delay_map)
 
     #
@@ -449,11 +448,10 @@ Negative time was found %s for '%s'. """,
     return files, inputs, trims_list, qual
 
 
-def build(definition, known_delay_map, args):
-    known_delay_map = json.loads(known_delay_map)
+def build(definition, known_delay_map, summarizer_params):
     validate_definition(definition)
     files, inputs, trims_list, qual = _make_list_of_trims(
-        definition, known_delay_map, args)
+        definition, known_delay_map, summarizer_params)
 
     # make filter templates
     ftmpl = []
@@ -722,9 +720,11 @@ Please see `alignment_info_by_sound_track --help'.""")
         _make_default_definition_main(args, parser)
         sys.exit(0)
 
+    summarizer_params = SyncDetectorSummarizerParams.from_json(args.summarizer_params)
+    known_delay_map = json.loads(args.known_delay_map)
     files, fc, vmap, amap = build(
         json_load(args.definition),
-        args.known_delay_map, args)
+        known_delay_map, summarizer_params)
     v_extra_ffargs = json_loads(args.v_extra_ffargs) if vmap else []
     a_extra_ffargs = json_loads(args.a_extra_ffargs) if amap else []
     call_ffmpeg_with_filtercomplex(
