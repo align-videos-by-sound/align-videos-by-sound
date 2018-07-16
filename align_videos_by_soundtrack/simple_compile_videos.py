@@ -20,12 +20,11 @@ import sys
 import os
 import io
 from copy import deepcopy
-from itertools import chain
 import logging
 
 import numpy as np
 
-from .align import SyncDetector, SyncDetectorSummarizerParams
+from .align import SyncDetector
 from .communicate import (
     parse_time,
     call_ffmpeg_with_filtercomplex,
@@ -39,6 +38,7 @@ from .utils import (
     validate_dict_one_by_template
     )
 #from . import _cache
+from . import cli_common
 
 
 _logger = logging.getLogger(__name__)
@@ -309,7 +309,6 @@ def _make_list_of_trims(definition, known_delay_map, summarizer_params):
 
     #
     qual = SyncDetector.summarize_stream_infos(einf)
-    trims_table = _mk_trims_table(intercuts, einf, qual)
     # make a list of time ranges which will be used as trim, and atrim.
     trims_list = []
     st_main = 0
@@ -417,8 +416,6 @@ Negative time was found %s for '%s'. """,
             if ins["video_mode"] == "overlay":
                 p = ins["video_mode_params"][0]
                 ovl_mode = p["mode"]
-                ovl_cropping = p["cropping"]
-                ovl_overlay = p["overlay"]
                 if ovl_mode == "sub_top":
                     res["videos"].append(trims[2])
                     res["videos"].append(trims[1])
@@ -626,9 +623,7 @@ What sort of name will you save this definition? [default: sample.json] """)
 
 
 def main(args=sys.argv):
-    import argparse, textwrap
-
-    parser = argparse.ArgumentParser(description=textwrap.dedent("""\
+    parser = cli_common.AvstArgumentParser(description="""\
 What this script does is quite similar to `concat_videos_by_sound_track`,
 but it does a bit more general tasks. Suppose there is a main unedited
 movie, there are multiple sub movie materials you want to insert into it.
@@ -672,61 +667,29 @@ stream, consider making an instruction to use "main" with "select".
 In this case, what should I do? Do I fill in with black images? Technically
 this is not impossible at all, but I would like to avoid confusing users
 who are only interested in the most basic use cases.
-""" % _sample_editinfo), formatter_class=argparse.RawDescriptionHelpFormatter)
+""" % _sample_editinfo)
     parser.add_argument("definition",
                         nargs="?",
                         help="\
 Text (JSON) file describing the definition for indicating the intercuts \
 position.")
-    parser.add_argument(
-        "-o", "--outfile", dest="outfile", default="compiled.mp4",
-        help="Specifying the output file. (default: %(default)s)")
-    parser.add_argument(
-        '--mode', choices=['script_bash', 'script_python', 'direct'], default='script_bash',
-        help="""\
-Switching whether to produce bash shellscript or to call ffmpeg directly. (default: %(default)s)""")
+    parser.editor_add_output_argument(default="compiled.mp4")
+    parser.editor_add_mode_argument()
     #####
-    parser.add_argument(
-        '--v_extra_ffargs', type=str,
-        default=json.dumps(["-color_primaries", "bt709", "-color_trc", "bt709", "-colorspace", "bt709"]),
-        help="""\
-Additional arguments to ffmpeg for output video streams. Pass list in JSON format. \
-(default: '%(default)s')""")
-    parser.add_argument(
-        '--a_extra_ffargs', type=str,
-        default=json.dumps([]),
-        help="""\
-Additional arguments to ffmpeg for output audio streams. Pass list in JSON format. \
-(default: '%(default)s')""")
-    #####
-    parser.add_argument(
-        '--summarizer_params',
-        type=str,
-        help="""Please see `alignment_info_by_sound_track --help'.""")
-    parser.add_argument(
-        '--known_delay_map',
-        type=str,
-        default="{}",
-        help="""\
-Please see `alignment_info_by_sound_track --help'.""")
+    parser.editor_add_extra_ffargs_arguments()
     #####
     args = parser.parse_args(args[1:])
-    logging.basicConfig(
-        level=logging.DEBUG,
-        stream=sys.stderr,
-        format="%(created)f|%(levelname)5s:%(module)s#%(funcName)s:%(message)s")
+    cli_common.logger_config()
 
     if not args.definition:
         _make_default_definition_main(args, parser)
         sys.exit(0)
 
-    summarizer_params = SyncDetectorSummarizerParams.from_json(args.summarizer_params)
-    known_delay_map = json.loads(args.known_delay_map)
     files, fc, vmap, amap = build(
         json_load(args.definition),
-        known_delay_map, summarizer_params)
-    v_extra_ffargs = json_loads(args.v_extra_ffargs) if vmap else []
-    a_extra_ffargs = json_loads(args.a_extra_ffargs) if amap else []
+        args.known_delay_map, args.summarizer_params)
+    v_extra_ffargs = args.v_extra_ffargs if vmap else []
+    a_extra_ffargs = args.a_extra_ffargs if amap else []
     call_ffmpeg_with_filtercomplex(
         args.mode,
         files,

@@ -12,23 +12,18 @@ from __future__ import unicode_literals
 from __future__ import absolute_import
 
 import sys
-import os
 import logging
-import json
-from itertools import chain
 
 import numpy as np
 
-from .align import SyncDetector, SyncDetectorSummarizerParams
-from .communicate import (
-    parse_time,
-    call_ffmpeg_with_filtercomplex)
+from .align import SyncDetector
+from .communicate import call_ffmpeg_with_filtercomplex
 from .ffmpeg_filter_graph import (
     Filter,
     ConcatWithGapFilterGraphBuilder,
     )
 from .utils import check_and_decode_filenames
-from . import _cache
+from . import cli_common
 
 
 _logger = logging.getLogger(__name__)
@@ -39,15 +34,10 @@ def _build(args):
         [args.base], exit_if_error=True)[0]
     targets = check_and_decode_filenames(
         args.splitted, min_num_files=1, exit_if_error=True)
-    known_delay_map_orig = json.loads(args.known_delay_map)
-    known_delay_map = {}
-    for k in known_delay_map_orig.keys():
-        nk = os.path.abspath(k)
-        known_delay_map[nk] = known_delay_map_orig[k]
-        known_delay_map[nk]["base"] = os.path.abspath(known_delay_map_orig[k]["base"])
+    known_delay_map = args.known_delay_map
 
-    a_filter_extra = json.loads(args.a_filter_extra) if args.a_filter_extra else {}
-    v_filter_extra = json.loads(args.v_filter_extra) if args.v_filter_extra else {}
+    a_filter_extra = args.a_filter_extra
+    v_filter_extra = args.v_filter_extra
 
     vf = lambda i: ",".join(filter(None, [v_filter_extra.get(""), v_filter_extra.get("%d" % i)]))
     af = lambda i: ",".join(filter(None, [a_filter_extra.get(""), a_filter_extra.get("%d" % i)]))
@@ -55,8 +45,10 @@ def _build(args):
     gaps = []
     #
     einf = []
-    params = SyncDetectorSummarizerParams.from_json(args.summarizer_params)
-    with SyncDetector(params=params, dont_cache=args.dont_cache) as sd:
+    with SyncDetector(
+        params=args.summarizer_params,
+        dont_cache=args.dont_cache) as sd:
+
         start = 0
         upd = base not in known_delay_map
         for i in range(len(targets)):
@@ -120,14 +112,11 @@ def _build(args):
 
 
 def main(args=sys.argv):
-    import argparse
-
-    parser = argparse.ArgumentParser(description="""\
-For a concert movie, now, \
-there is one movie that shoots the whole event and a movie \
-divided into two by stopping shooting (or cutting by editing) \
-once. This script combines the latter with filling the gap, \
-based on the former sound tracks.""")
+    parser = cli_common.AvstArgumentParser(description="""
+For a concert movie, now, there is one movie that shoots the
+whole event and a movie divided into two by stopping shooting
+(or cutting by editing) once. This script combines the latter
+with filling the gap, based on the former sound tracks.""")
     parser.add_argument(
         "base",
         help="""\
@@ -141,13 +130,8 @@ chronological order. When concatenating, if there is a gap which \
 is detected by the "base" audio, this script fills it. However, \
 even if there is overlap, this script does not complain anything, \
 but it goes without saying that it's a "strange" movie.""")
-    parser.add_argument(
-        "-o", "--outfile", dest="outfile", default="concatenated.mp4",
-        help="Specifying the output file. (default: %(default)s)")
-    parser.add_argument(
-        '--mode', choices=['script_bash', 'script_python', 'direct'], default='script_bash',
-        help="""\
-Switching whether to produce bash shellscript or to call ffmpeg directly. (default: %(default)s)""")
+    parser.editor_add_output_argument(default="concatenated.mp4")
+    parser.editor_add_mode_argument()
     #
     #####
     parser.add_argument(
@@ -156,28 +140,11 @@ Switching whether to produce bash shellscript or to call ffmpeg directly. (defau
 Switching whether to use no audio or to use base audio as gap. (default: %(default)s)""")
     #
     parser.add_argument(
-        '--a_filter_extra', type=str,
-        help="""\
-Filter to add to the audio input stream. Pass in JSON format, in dictionary format \
-(stream by key, filter by value). For example, '{"1": "volume = 0.5", "2": "loudnorm"}' etc. \
-The key "0" is of base audio media. \
-If the key is blank, it means all input streams. Only single input / single output \
-filters can be used.""")
-    ###
-    parser.add_argument(
         '--video_gap', choices=['black', 'base'], default='base',
         help="""\
 Switching whether to use no video or to use base video as gap. (default: %(default)s)""")
     #
-    parser.add_argument(
-        '--v_filter_extra', type=str,
-        help="""\
-Filter to add to the video input stream. Pass in JSON format, in dictionary format \
-(stream by key, filter by value). For example, '{"1": "boxblur=luma_radius=2:luma_power=1"}' etc. \
-The key "0" is of base audio media. \
-If the key is blank, it means all input streams. Only single input / single output \
-filters can be used.""")
-    #####
+    parser.editor_add_filter_extra_arguments()
     parser.add_argument(
         '--start_gap', choices=['omit', 'pad'],
         help="""\
@@ -187,48 +154,16 @@ purpose of `concatanate`. The default is "omit" if there are two or more media \
 specified as "splitted". If there is only one media specified as "splitted", \
 the default is "pad", assuming your goal is to fill in the leading gap.""")
     #####
-    parser.add_argument(
-        '--v_extra_ffargs', type=str,
-        default=json.dumps(["-color_primaries", "bt709", "-color_trc", "bt709", "-colorspace", "bt709"]),
-        help="""\
-Additional arguments to ffmpeg for output video streams. Pass list in JSON format. \
-(default: '%(default)s')""")
-    parser.add_argument(
-        '--a_extra_ffargs', type=str,
-        default=json.dumps([]),
-        help="""\
-Additional arguments to ffmpeg for output audio streams. Pass list in JSON format. \
-(default: '%(default)s')""")
-    #####
-    parser.add_argument(
-        '--summarizer_params',
-        type=str,
-        help="""Please see `alignment_info_by_sound_track --help'.""")
-    parser.add_argument(
-        '--known_delay_map',
-        type=str,
-        default="{}",
-        help="""\
-Please see `alignment_info_by_sound_track --help'.""")
-    #####
-    parser.add_argument(
-        '--dont_cache',
-        action="store_true",
-        help='''Normally, this script stores the result in cache ("%s"). \
-If you hate this behaviour, specify this option.''' % (
-            _cache.cache_root_dir))
+    parser.editor_add_extra_ffargs_arguments()
     #####
     args = parser.parse_args(args[1:])
     if not args.start_gap:
         args.start_gap = "omit" if len(args.splitted) > 1 else "pad"
-    logging.basicConfig(
-        level=logging.DEBUG,
-        stream=sys.stderr,
-        format="%(created)f|%(levelname)5s:%(module)s#%(funcName)s:%(message)s")
+    cli_common.logger_config()
 
     files, fc, vmap, amap = _build(args)
-    v_extra_ffargs = json.loads(args.v_extra_ffargs) if vmap else []
-    a_extra_ffargs = json.loads(args.a_extra_ffargs) if amap else []
+    v_extra_ffargs = args.v_extra_ffargs if vmap else []
+    a_extra_ffargs = args.a_extra_ffargs if amap else []
     call_ffmpeg_with_filtercomplex(
         args.mode,
         files,
