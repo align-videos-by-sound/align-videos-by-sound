@@ -392,21 +392,18 @@ def _make_list_of_trims(definition, known_delay_map, args):
                     sa, ea = base_trims_table[alt][i]
                     if (sa >= 0 and ea >= 0):
                         _logger.warn("""\
-Negative time was found ("%s", "%s") for '%s'. \
-We used '%s' ("%s", "%s") instead.""",
-                                     duration_to_hhmmss(s),
-                                     duration_to_hhmmss(e),
+Negative time was found %s for '%s'. \
+We used '%s' %s instead.""",
+                                     duration_to_hhmmss(s, e),
                                      os.path.basename(files[idx]),
                                      os.path.basename(files[alt]),
-                                     duration_to_hhmmss(sa),
-                                     duration_to_hhmmss(ea))
+                                     duration_to_hhmmss(sa, ea))
                         trims.append((alt, sa, ea))
                         break
                 else:
                     _logger.error("""\
-Negative time was found ("%s", "%s") for '%s'. """,
-                                  duration_to_hhmmss(s),
-                                  duration_to_hhmmss(e),
+Negative time was found %s for '%s'. """,
+                                  duration_to_hhmmss(s, e),
                                   os.path.basename(files[idx]))
                     sys.exit(1)
         trims = np.array(trims)
