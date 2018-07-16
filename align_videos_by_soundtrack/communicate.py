@@ -112,13 +112,18 @@ def check_stderroutput(*popenargs, **kwargs):
     return stderr_output
 
 
-def duration_to_hhmmss(duration):
-    ss_h = abs(duration) // 3600
-    ss_m = abs(duration) // 60
-    ss_s = abs(duration) % 60
-    return "%s%02d:%02d:%02d.%s" % (
-        "" if duration >= 0 else "-",
-        ss_h, ss_m, ss_s, ("%.3f" % duration).split(".")[1])
+def duration_to_hhmmss(*durations):
+    def _conv(d):
+        ss_h = abs(d) // 3600
+        ss_m = abs(d) // 60
+        ss_s = abs(d) % 60
+        return "%s%02d:%02d:%02d.%s" % (
+            "" if d >= 0 else "-",
+            ss_h, ss_m, ss_s, ("%.3f" % d).split(".")[1])
+    if len(durations) > 1:
+        return [_conv(d) for d in durations]
+    else:
+        return _conv(durations[0])
 
 
 def parse_time(s):

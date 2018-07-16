@@ -16,15 +16,14 @@ import json
 import sys
 import os
 import logging
-from itertools import chain
 
 import numpy as np
 
-from .align import SyncDetector, SyncDetectorSummarizerParams
-from .communicate import parse_time, call_ffmpeg_with_filtercomplex
+from .align import SyncDetector
+from .communicate import call_ffmpeg_with_filtercomplex
 from .ffmpeg_filter_graph import Filter, ConcatWithGapFilterGraphBuilder
 from .utils import check_and_decode_filenames
-from . import _cache
+from . import cli_common
 
 
 _logger = logging.getLogger(__name__)
@@ -132,14 +131,16 @@ def _build(args):
     else:
         files = files[:shape[0] * shape[1]]
     #
-    a_filter_extra = json.loads(args.a_filter_extra) if args.a_filter_extra else {}
-    v_filter_extra = json.loads(args.v_filter_extra) if args.v_filter_extra else {}
+    a_filter_extra = args.a_filter_extra
+    v_filter_extra = args.v_filter_extra
     #
-    params = SyncDetectorSummarizerParams.from_json(args.summarizer_params)
-    with SyncDetector(params=params, dont_cache=args.dont_cache) as det:
+    with SyncDetector(
+        params=args.summarizer_params,
+        clear_cache=args.clear_cache) as det:
+
         ares = det.align(
             files,
-            known_delay_map=json.loads(args.known_delay_map))
+            known_delay_map=args.known_delay_map)
     qual = SyncDetector.summarize_stream_infos(ares)
 
     b = _StackVideosFilterGraphBuilder(
@@ -191,66 +192,35 @@ def _build(args):
 
 
 def main(args=sys.argv):
-    import argparse
-
-    parser = argparse.ArgumentParser(description="""\
-Suppose that a certain concert is shot by multiple people from multiple angles. \
-In most cases, shooting start and shooting end time have individual differences. \
-This program combines movies of multiple angles in a tile shape with "hstack" and "vstack", \
-based on sound track synchronization. Although it is a program for the main object \
-to arrange tile-like and simultaneous playback, it is possible to do a little \
+    parser = cli_common.AvstArgumentParser(description="""\
+Suppose that a certain concert is shot by multiple people from multiple angles.
+In most cases, shooting start and shooting end time have individual differences.
+This program combines movies of multiple angles in a tile shape with "hstack" and "vstack",
+based on sound track synchronization. Although it is a program for the main object
+to arrange tile-like and simultaneous playback, it is possible to do a little
 different thing from this. See the option description.""")
     parser.add_argument(
         "files", nargs="+",
         help="The media files which contains both video and audio.")
-    parser.add_argument(
-        "-o", "--outfile", dest="outfile", default="merged.mp4",
-        help="Specifying the output file. (default: %(default)s)")
-    parser.add_argument(
-        '--mode', choices=['script_bash', 'script_python', 'direct'], default='script_bash',
-        help="""\
-Switching whether to produce bash shellscript or to call ffmpeg directly. (default: %(default)s)""")
+    parser.editor_add_output_argument(default="merged.mp4")
+    parser.editor_add_mode_argument()
     #####
     parser.add_argument(
         '--audio_mode', choices=['amerge', 'multi_streams', 'individual'], default='amerge',
         help="""\
-Switching whether to merge audios or to keep each as multi streams, or \
-to pad each into the corresponding indivisual output file. --audio_mode='indivisual' \
+Switching whether to merge audios or to keep each as multi streams, or
+to pad each into the corresponding indivisual output file. --audio_mode='indivisual'
 implies --video_mode='indivisual'. (default: %(default)s)""")
     #
     parser.add_argument(
-        '--a_filter_extra', type=str,
-        help="""\
-Filter to add to the audio input stream. Pass in JSON format, in dictionary format \
-(stream by key, filter by value). For example, '{"1": "volume = 0.5", "2": "loudnorm"}' etc. \
-If the key is blank, it means all input streams. Only single input / single output \
-filters can be used.""")
-    ###
-    parser.add_argument(
         '--video_mode', choices=['stack', 'multi_streams', 'indivisual'], default='stack',
         help="""\
-Switching whether to stack videos or to keep each as multi streams, or \
-to pad each into the corresponding indivisual output file. --video_mode='indivisual' \
+Switching whether to stack videos or to keep each as multi streams, or
+to pad each into the corresponding indivisual output file. --video_mode='indivisual'
 implies --audio_mode='indivisual'. (default: %(default)s)""")
     #
-    parser.add_argument(
-        '--v_filter_extra', type=str,
-        help="""\
-Filter to add to the video input stream. Pass in JSON format, in dictionary format \
-(stream by key, filter by value). For example, '{"1": "boxblur=luma_radius=2:luma_power=1"}' etc. \
-If the key is blank, it means all input streams. Only single input / single output \
-filters can be used.""")
+    parser.editor_add_filter_extra_arguments()
     #####
-    parser.add_argument(
-        '--summarizer_params',
-        type=str,
-        help="""Please see `alignment_info_by_sound_track --help'.""")
-    parser.add_argument(
-        '--known_delay_map',
-        type=str,
-        default="{}",
-        help="""\
-Please see `alignment_info_by_sound_track --help'.""")
     parser.add_argument(
         '--shape', type=str, default="[2, 2]",
         help="The shape of the tile, like '[2, 2]'. (default: %(default)s)")
@@ -265,35 +235,14 @@ it takes from max sample rate of input medias. (default: %(default)d)")
         '--height-per-cell', dest="h", type=int, default=540,
         help="Height of the cell. (default: %(default)d)")
     #####
-    parser.add_argument(
-        '--v_extra_ffargs', type=str,
-        default=json.dumps(["-color_primaries", "bt709", "-color_trc", "bt709", "-colorspace", "bt709"]),
-        help="""\
-Additional arguments to ffmpeg for output video streams. Pass list in JSON format. \
-(default: '%(default)s')""")
-    parser.add_argument(
-        '--a_extra_ffargs', type=str,
-        default=json.dumps([]),
-        help="""\
-Additional arguments to ffmpeg for output audio streams. Pass list in JSON format. \
-(default: '%(default)s')""")
-    #####
-    parser.add_argument(
-        '--dont_cache',
-        action="store_true",
-        help='''Normally, this script stores the result in cache ("%s"). \
-If you hate this behaviour, specify this option.''' % (
-            _cache.cache_root_dir))
+    parser.editor_add_extra_ffargs_arguments()
     #####
     args = parser.parse_args(args[1:])
-    logging.basicConfig(
-        level=logging.DEBUG,
-        stream=sys.stderr,
-        format="%(created)f|%(levelname)5s:%(module)s#%(funcName)s:%(message)s")
+    cli_common.logger_config()
     
     files, fc, (vmap, amap) = _build(args)
-    v_extra_ffargs = json.loads(args.v_extra_ffargs) if vmap else []
-    a_extra_ffargs = json.loads(args.a_extra_ffargs) if amap else []
+    v_extra_ffargs = args.v_extra_ffargs if vmap else []
+    a_extra_ffargs = args.a_extra_ffargs if amap else []
     if args.video_mode == 'indivisual' or args.audio_mode == 'indivisual':
         outbase, outext = os.path.splitext(args.outfile)
         outfiles = ["{}_{:02d}{}".format(outbase, i, outext)

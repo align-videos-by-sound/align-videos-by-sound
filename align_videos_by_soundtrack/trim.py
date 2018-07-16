@@ -9,24 +9,22 @@ from __future__ import unicode_literals
 from __future__ import absolute_import
 
 import sys
-import json
 import logging
 
-from .align import SyncDetector, SyncDetectorSummarizerParams
+from .align import SyncDetector
 from .communicate import (
-    parse_time,
     check_call,
     duration_to_hhmmss)
 from .utils import check_and_decode_filenames
+from . import cli_common
 
 
 _logger = logging.getLogger(__name__)
 
 
 def main(args=sys.argv):
-    import argparse
-
-    parser = argparse.ArgumentParser()
+    parser = cli_common.AvstArgumentParser(description="""\
+Trim media based on synchronization with audio tracks.""")
     parser.add_argument(
         "files", nargs="+",
         help="The media files which contain at least audio stream.")
@@ -35,19 +33,8 @@ def main(args=sys.argv):
     parser.add_argument(
         "--trim_end", action="store_true")
     #####
-    parser.add_argument(
-        '--summarizer_params',
-        type=str,
-        help="""Please see `alignment_info_by_sound_track --help'.""")
-    parser.add_argument(
-        '--known_delay_map',
-        type=str,
-        default="{}",
-        help="""\
-Please see `alignment_info_by_sound_track --help'.""")
-    #####
     args = parser.parse_args(args[1:])
-    logging.basicConfig(level=logging.DEBUG, stream=sys.stderr)
+    cli_common.logger_config()
 
     files = check_and_decode_filenames(args.files)
     if not files:
@@ -57,11 +44,12 @@ Please see `alignment_info_by_sound_track --help'.""")
     import os
     if not os.path.exists(args.outdir):
         os.mkdir(args.outdir)
-    params = SyncDetectorSummarizerParams.from_json(args.summarizer_params)
-    with SyncDetector(params=params) as sd:
+    with SyncDetector(
+        params=args.summarizer_params
+        clear_cache=args.clear_cache) as sd:
         infos = sd.align(
             files,
-            known_delay_map=json.loads(args.known_delay_map))
+            known_delay_map=args.known_delay_map)
 
         for fn, editinfo in list(zip(files, infos)):
             start_offset = editinfo["trim"]
