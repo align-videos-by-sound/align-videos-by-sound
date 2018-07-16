@@ -221,7 +221,7 @@ def validate_definition(definition):
             sys.exit(1)
 
 
-def _make_list_of_trims(definition, known_delay_map, summarizer_params):
+def _make_list_of_trims(definition, known_delay_map, summarizer_params, clear_cache):
     #
     def _translate_definition(definition):
         _inputs = definition["inputs"]  # as human readable
@@ -306,7 +306,7 @@ def _make_list_of_trims(definition, known_delay_map, summarizer_params):
         [inp["file"] for inp in inputs], exit_if_error=True)
     with SyncDetector(
         params=summarizer_params,
-        clear_cache=args.clear_cache) as sd:
+        clear_cache=clear_cache) as sd:
         einf = sd.align(files, known_delay_map=known_delay_map)
 
     #
@@ -447,10 +447,10 @@ Negative time was found %s for '%s'. """,
     return files, inputs, trims_list, qual
 
 
-def build(definition, known_delay_map, summarizer_params):
+def build(definition, known_delay_map, summarizer_params, clear_cache):
     validate_definition(definition)
     files, inputs, trims_list, qual = _make_list_of_trims(
-        definition, known_delay_map, summarizer_params)
+        definition, known_delay_map, summarizer_params, clear_cache)
 
     # make filter templates
     ftmpl = []
@@ -689,7 +689,7 @@ position.")
 
     files, fc, vmap, amap = build(
         json_load(args.definition),
-        args.known_delay_map, args.summarizer_params)
+        args.known_delay_map, args.summarizer_params, args.clear_cache)
     v_extra_ffargs = args.v_extra_ffargs if vmap else []
     a_extra_ffargs = args.a_extra_ffargs if amap else []
     call_ffmpeg_with_filtercomplex(
