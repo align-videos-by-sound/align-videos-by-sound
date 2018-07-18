@@ -274,7 +274,7 @@ def translate_inputs_definition(definition):
         for inp in [_inputs["main"]] + _inputs["sub"]]
 
     
-def translate_intercuts_definition(definition):
+def translate_intercuts_definition(definition, einf):
     _intercuts = definition["intercuts"]  # as human readable
     def _get_idx(p):
         if p == "main":
@@ -291,7 +291,6 @@ def translate_intercuts_definition(definition):
             "start_time": parse_time(_intercuts[i].get(
                     "start_time", -1)),
             "end_time": parse_time(_intercuts[i].get("end_time", -1)),
-            "time_origin": _intercuts[i].get("time_origin", "sub"),
             "video_mode": _intercuts[i].get("video_mode", "select"),
             "audio_mode": _intercuts[i].get("audio_mode", "select"),
             "video_mode_params": _intercuts[i].get(
@@ -304,6 +303,20 @@ def translate_intercuts_definition(definition):
             "a_extra_filter": _intercuts[i].get(
                 "a_extra_filter", ""),
             }
+        off = einf[ins["idx"]]["pad"] - einf[0]["pad"]
+        dur = einf[ins["idx"]]["orig_duration"]
+        time_origin = _intercuts[i].get("time_origin", "sub")
+        maincounting = time_origin == "main"
+        # Let's fill in unspecified time. We must pay attention
+        # to `time_origin`.
+        if ins["start_time"] < 0:
+            ins["start_time"] = off if maincounting else 0
+        if ins["end_time"] < 0:
+            ins["end_time"] = dur + (off if maincounting else 0)
+        # Let's standardize the time reference to `main` counting.
+        if not maincounting:
+            ins["start_time"] += off
+            ins["end_time"] += off
         #
         params = ins["video_mode_params"]
         if ins["video_mode"] in ("overlay", "blend"):
@@ -358,21 +371,7 @@ def _make_list_of_trims(definition, known_delay_map, summarizer_params, clear_ca
         # ]
         _tmp = []  # for idx=0
         for ins in intercuts:
-            off = einf[ins["idx"]]["pad"] - einf[0]["pad"]
-            dur = einf[ins["idx"]]["orig_duration"]
-            maincounting = ins["time_origin"] == "main"
-            # Let's fill in unspecified time. We must pay attention
-            # to `time_origin`.
             _tmp.append([ins["start_time"], ins["end_time"]])
-            if _tmp[-1][0] < 0:
-                _tmp[-1][0] = off if maincounting else 0
-            if _tmp[-1][1] < 0:
-                _tmp[-1][1] = dur + (off if maincounting else 0)
-            # Let's standardize the time reference to `main` counting.
-            if ins["time_origin"] == "sub":
-                _tmp[-1][0] += off
-                _tmp[-1][1] += off
-            #
             _tmp[-1][0] = max(
                 _tmp[-1][0],
                 inputs[0]["start_time"])
@@ -394,12 +393,12 @@ def _make_list_of_trims(definition, known_delay_map, summarizer_params, clear_ca
         return result
     #
     inputs = translate_inputs_definition(definition)
-    intercuts = translate_intercuts_definition(definition)
     files = [inp["file"] for inp in inputs]
     with SyncDetector(
         params=summarizer_params,
         clear_cache=clear_cache) as sd:
         einf = sd.align(files, known_delay_map=known_delay_map)
+    intercuts = translate_intercuts_definition(definition, einf)
 
     #
     qual = SyncDetector.summarize_stream_infos(einf)
