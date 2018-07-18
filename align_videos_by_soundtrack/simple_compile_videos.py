@@ -274,6 +274,14 @@ def translate_definition(definition):
             }
         for inp in [_inputs["main"]] + _inputs["sub"]]
 
+    def _get_idx(p):
+        if p == "main":
+            return 0
+        elif p == "sub":
+            return ins["idx"]
+        elif isinstance(p, (int,)):
+            return p + 1
+
     intercuts = []  # flatten, parsed time
     for i in range(len(_intercuts)):
         ins = {
@@ -287,13 +295,39 @@ def translate_definition(definition):
             "video_mode_params": _intercuts[i].get(
                 "video_mode_params", []),
             "audio_mode_params": _intercuts[i].get(
-                "audio_mode_params", ["main"]),
+                "audio_mode_params", []),
 
             "v_extra_filter": _intercuts[i].get(
                 "v_extra_filter", ""),
             "a_extra_filter": _intercuts[i].get(
                 "a_extra_filter", ""),
             }
+        #
+        params = ins["video_mode_params"]
+        if ins["video_mode"] in ("overlay", "blend"):
+            k = "bottom_layer"
+            if ins["video_mode"] == "overlay":
+                k = "partner_layer"
+            if k in params[0]:
+                params[0]["partner_layer"] = _get_idx(params[0].pop(k))
+        else:  # select
+            if not params:
+                params.append("sub")
+            params[0] = _get_idx(params[0])
+        ins["video_mode_params"] = params
+        #
+        params = ins["audio_mode_params"]
+        if ins["audio_mode"] in ("amerge", "amix"):
+            if not params:
+                params.extend([0, ins["idx"]])
+            else:
+                params = list(map(_get_idx, params))
+        else:  # select
+            if not params:
+                params.append("sub")
+            params[0] = _get_idx(params[0])
+        ins["audio_mode_params"] = params
+        #
         intercuts.append(ins)
 
     return inputs, intercuts
@@ -396,42 +430,17 @@ def _make_list_of_trims(definition, known_delay_map, summarizer_params, clear_ca
         # [[idx, start, end], ...]
         trims = []
         use_indexes = [0]
-        def _get_idx(p):
-            if p == "main":
-                return 0
-            elif p == "sub":
-                return ins["idx"]
-            elif isinstance(p, (int,)):
-                return p + 1
-
         if ins["video_mode"] in ("overlay", "blend"):
             params = ins["video_mode_params"]
-
             # for blend, it's top layer
             use_indexes.append(ins["idx"])
-
-            k = "bottom_layer"
-            if ins["video_mode"] == "blend":
-                k = "bottom_layer"
-            else:
-                k = "partner_layer"
+            #
             use_indexes.append(
-                _get_idx(params[0].get(k, int(last) - 1)))
+                params[0].get("partner_layer", int(last) - 1))
         else:  # select
-            params = ins["video_mode_params"]
-            p = params[0] if params else "sub"
-            use_indexes.append(_get_idx(p))
+            use_indexes.append(params[0])
         astart_of_use_indexes = len(use_indexes)
-        if ins["audio_mode"] in ("amerge", "amix"):
-            if not ins["audio_mode_params"]:
-                use_indexes.extend([0, ins["idx"]])
-            else:
-                for p in ins["audio_mode_params"]:
-                    use_indexes.append(_get_idx(p))
-        else:  # select
-            params = ins["audio_mode_params"]
-            p = params[0] if params else "sub"
-            use_indexes.append(_get_idx(p))
+        use_indexes.extend(ins["audio_mode_params"])
         for idx in use_indexes:
             s, e = base_trims_table[idx][i]
             if (s >= 0 and e >= 0):
