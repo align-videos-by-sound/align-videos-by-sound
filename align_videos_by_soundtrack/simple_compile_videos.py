@@ -347,7 +347,7 @@ def _make_list_of_trims(definition, known_delay_map, summarizer_params, clear_ca
         else:
             return t
     #
-    def _mk_trims_table(inputs, intercuts, einf, qual):
+    def _mk_trims_table(inputs, intercuts, einf):
         # result = [
         #   [[s1, e1],...],  # for idx=0
         #   ...
@@ -412,7 +412,7 @@ def _make_list_of_trims(definition, known_delay_map, summarizer_params, clear_ca
         else:
             return np.isclose(s, e)
 
-    base_trims_table = _mk_trims_table(inputs, intercuts, einf, qual)
+    base_trims_table = _mk_trims_table(inputs, intercuts, einf)
     last = 0  # default bottom layer for blend
     for i, ins in enumerate(intercuts):
         if base_trims_table[0][i][0] >= base_trims_table[0][i][1]:
