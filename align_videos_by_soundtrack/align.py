@@ -162,14 +162,15 @@ class _FreqTransSummarizer(object):
                     delta_t = x_i - x_j
                     mincond_ok = math.isnan(min_delay) or delta_t >= min_delay
                     maxcond_ok = math.isnan(max_delay) or delta_t <= max_delay
-                    inc = 1 if mincond_ok and maxcond_ok else 0
-                    t_diffs[delta_t] += inc
-    
-        t_diffs_sorted = sorted(list(t_diffs.items()), key=lambda x: x[1])
-        # _logger.debug(t_diffs_sorted)
-        time_delay = t_diffs_sorted[-1][0]
-
-        return self._x_to_secs(time_delay)
+                    if mincond_ok and maxcond_ok:
+                        t_diffs[delta_t] += 1
+        try:
+            return self._x_to_secs(
+                sorted(list(t_diffs.items()), key=lambda x: -x[1])[0][0])
+        except IndexError as e:
+            raise Exception(
+                """I could not find a match. \
+Are the target medias sure to shoot the same event?""")
 
 
 class SyncDetector(object):
