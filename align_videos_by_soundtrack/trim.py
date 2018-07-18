@@ -45,7 +45,7 @@ Trim media based on synchronization with audio tracks.""")
     if not os.path.exists(args.outdir):
         os.mkdir(args.outdir)
     with SyncDetector(
-        params=args.summarizer_params
+        params=args.summarizer_params,
         clear_cache=args.clear_cache) as sd:
         infos = sd.align(
             files,
