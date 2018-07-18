@@ -50,7 +50,16 @@ _sample_editinfo = """\
         "main": {
             "file": "main.mp4",
             "v_extra_filter": "",
-            "a_extra_filter": "loudnorm"
+            "a_extra_filter": "loudnorm",
+
+            /*
+             * "intercuts" also has "start_time" and "end_time",
+             * but they are for determining the insertion position.
+             * These "start_time", "end_time" can be used to decide
+             * "a range you do not want to use".
+             */
+            "start_time": "00:00:03",
+            "end_time": "00:20:00"
         },
         "sub": [
             {
@@ -250,40 +259,48 @@ intercuts[%d]["video_mode_params"]""" % i, list_size_max=1)
 intercuts[%d]["video_mode_params"]""" % i, list_size_max=1)
 
 
+#
+def translate_definition(definition):
+    _inputs = definition["inputs"]  # as human readable
+    _intercuts = definition["intercuts"]  # as human readable
+    #
+    inputs = [  # flatten, parsed time
+        {
+            "file": inp["file"],
+            "v_extra_filter": inp.get("v_extra_filter"),
+            "a_extra_filter": inp.get("a_extra_filter"),
+            "start_time": parse_time(inp.get("start_time", 0)),
+            "end_time": parse_time(inp.get("end_time", float("inf"))),
+            }
+        for inp in [_inputs["main"]] + _inputs["sub"]]
+
+    intercuts = []  # flatten, parsed time
+    for i in range(len(_intercuts)):
+        ins = {
+            "idx": _intercuts[i]["sub_idx"] + 1,
+            "start_time": parse_time(_intercuts[i].get(
+                    "start_time", -1)),
+            "end_time": parse_time(_intercuts[i].get("end_time", -1)),
+            "time_origin": _intercuts[i].get("time_origin", "sub"),
+            "video_mode": _intercuts[i].get("video_mode", "select"),
+            "audio_mode": _intercuts[i].get("audio_mode", "select"),
+            "video_mode_params": _intercuts[i].get(
+                "video_mode_params", []),
+            "audio_mode_params": _intercuts[i].get(
+                "audio_mode_params", ["main"]),
+
+            "v_extra_filter": _intercuts[i].get(
+                "v_extra_filter", ""),
+            "a_extra_filter": _intercuts[i].get(
+                "a_extra_filter", ""),
+            }
+        intercuts.append(ins)
+
+    return inputs, intercuts
+#
+
+
 def _make_list_of_trims(definition, known_delay_map, summarizer_params, clear_cache):
-    #
-    def _translate_definition(definition):
-        _inputs = definition["inputs"]  # as human readable
-        _intercuts = definition["intercuts"]  # as human readable
-
-        inputs = []  # flatten
-        inputs.append(_inputs["main"])
-        inputs.extend(_inputs["sub"])
-
-        intercuts = []  # flatten, parsed time
-        for i in range(len(_intercuts)):
-            ins = {
-                "idx": _intercuts[i]["sub_idx"] + 1,
-                "start_time": parse_time(_intercuts[i].get(
-                        "start_time", -1)),
-                "end_time": parse_time(_intercuts[i].get("end_time", -1)),
-                "time_origin": _intercuts[i].get("time_origin", "sub"),
-                "video_mode": _intercuts[i].get("video_mode", "select"),
-                "audio_mode": _intercuts[i].get("audio_mode", "select"),
-                "video_mode_params": _intercuts[i].get(
-                    "video_mode_params", []),
-                "audio_mode_params": _intercuts[i].get(
-                    "audio_mode_params", ["main"]),
-
-                "v_extra_filter": _intercuts[i].get(
-                    "v_extra_filter", ""),
-                "a_extra_filter": _intercuts[i].get(
-                    "a_extra_filter", ""),
-                }
-            intercuts.append(ins)
-
-        return inputs, intercuts
-    #
     def _round_time(t):
         # Round the specified "seconds" to a multiple of the
         # time width between video frames. This is to prevent
@@ -296,7 +313,7 @@ def _make_list_of_trims(definition, known_delay_map, summarizer_params, clear_ca
         else:
             return t
     #
-    def _mk_trims_table(intercuts, einf, qual):
+    def _mk_trims_table(inputs, intercuts, einf, qual):
         # result = [
         #   [[s1, e1],...],  # for idx=0
         #   ...
@@ -319,6 +336,10 @@ def _make_list_of_trims(definition, known_delay_map, summarizer_params, clear_ca
             if ins["time_origin"] == "sub":
                 _tmp[-1][0] += off
                 _tmp[-1][1] += off
+            #
+            _tmp[-1][0] = max(
+                _tmp[-1][0],
+                inputs[0]["start_time"])
         # Let's make adjustments so as not to overlap. Let's give
         # priority to the material that comes later in time.
         _tmp.sort()
@@ -331,11 +352,12 @@ def _make_list_of_trims(definition, known_delay_map, summarizer_params, clear_ca
             off = einf[idx]["pad"] - einf[0]["pad"]
             result = np.vstack((result, [result[0] - off]))
         for idx in range(len(einf)):
-            dur = einf[idx]["orig_duration"]
+            off = einf[idx]["pad"] - einf[0]["pad"]
+            dur = min(einf[idx]["orig_duration"], inputs[0]["end_time"] - off)
             result[idx][np.where(result[idx] > dur)] = dur
         return result
     #
-    inputs, intercuts = _translate_definition(definition)
+    inputs, intercuts = translate_definition(definition)
     files = check_and_decode_filenames(
         [inp["file"] for inp in inputs], exit_if_error=True)
     with SyncDetector(
@@ -347,7 +369,7 @@ def _make_list_of_trims(definition, known_delay_map, summarizer_params, clear_ca
     qual = SyncDetector.summarize_stream_infos(einf)
     # make a list of time ranges which will be used as trim, and atrim.
     trims_list = []
-    st_main = 0
+    st_main = inputs[0]["start_time"]
     def _desired_dur_is_too_small(s, e):
         if s < 0 or e < 0:
             return True
@@ -357,7 +379,7 @@ def _make_list_of_trims(definition, known_delay_map, summarizer_params, clear_ca
         else:
             return np.isclose(s, e)
 
-    base_trims_table = _mk_trims_table(intercuts, einf, qual)
+    base_trims_table = _mk_trims_table(inputs, intercuts, einf, qual)
     last = 0  # default bottom layer for blend
     for i, ins in enumerate(intercuts):
         if base_trims_table[0][i][0] >= base_trims_table[0][i][1]:
@@ -472,11 +494,12 @@ Negative time was found %s for '%s'. """,
             #
             trims_list[-1]["intercuts"] = res
         st_main = trims[0,2]
-    if st_main < einf[0]["orig_duration"]:
+    main_dur = min(inputs[0]["end_time"], einf[0]["orig_duration"])
+    if st_main < main_dur:
         if not _desired_dur_is_too_small(
-            st_main, einf[0]["orig_duration"]):
+            st_main, main_dur):
             trims_list.append({
-                    "main": (0, st_main, einf[0]["orig_duration"]),
+                    "main": (0, st_main, main_dur),
                     })
 
     return files, inputs, trims_list, qual
