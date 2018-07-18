@@ -488,7 +488,7 @@ def call_ffmpeg_with_filtercomplex(
 #! /bin/sh
 # -*- coding: utf-8 -*-
 
-ffmpeg -y \\
+ffmpeg -hide_banner -y \\
   {} \\
   -filter_complex "
 {}
@@ -497,7 +497,7 @@ ffmpeg -y \\
            filter_complex,
            " ".join(_quote.map(map_args))).encode("utf-8"))
     else:
-        cmd = ["ffmpeg", "-y"]
+        cmd = ["ffmpeg", "-hide_banner", "-y"]
         cmd.extend(ifile_args)
         cmd.extend(["-filter_complex", filter_complex])
         cmd.extend(map_args)
