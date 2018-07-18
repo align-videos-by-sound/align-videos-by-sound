@@ -122,7 +122,11 @@ def _build(args):
     if end_pad and args.end_gap == "pad":
         start, gap = gaps[len(targets)]
         _add_gap(start, gap)
-    fc, vmap, amap = bld.build()
+    try:
+        fc, vmap, amap = bld.build()
+    except Exception as e:
+        _logger.warning("Nothing to do.")
+        sys.exit(0)
     return [base] + targets, fc, [vmap], [amap]
 
 
