@@ -260,11 +260,10 @@ intercuts[%d]["video_mode_params"]""" % i, list_size_max=1)
 
 
 #
-def translate_definition(definition):
+def translate_inputs_definition(definition):
     _inputs = definition["inputs"]  # as human readable
-    _intercuts = definition["intercuts"]  # as human readable
     #
-    inputs = [  # flatten, parsed time
+    return [  # flatten, parsed time
         {
             "file": check_and_decode_filenames([inp["file"]], exit_if_error=True)[0],
             "v_extra_filter": inp.get("v_extra_filter"),
@@ -274,6 +273,9 @@ def translate_definition(definition):
             }
         for inp in [_inputs["main"]] + _inputs["sub"]]
 
+    
+def translate_intercuts_definition(definition):
+    _intercuts = definition["intercuts"]  # as human readable
     def _get_idx(p):
         if p == "main":
             return 0
@@ -330,7 +332,7 @@ def translate_definition(definition):
         #
         intercuts.append(ins)
 
-    return inputs, intercuts
+    return intercuts
 #
 
 
@@ -391,7 +393,8 @@ def _make_list_of_trims(definition, known_delay_map, summarizer_params, clear_ca
             result[idx][np.where(result[idx] > dur)] = dur
         return result
     #
-    inputs, intercuts = translate_definition(definition)
+    inputs = translate_inputs_definition(definition)
+    intercuts = translate_intercuts_definition(definition)
     files = [inp["file"] for inp in inputs]
     with SyncDetector(
         params=summarizer_params,
