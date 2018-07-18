@@ -90,7 +90,7 @@ class _FreqTransSummarizer(object):
         return freqs_dict
 
     def _secs_to_x(self, secs):
-        j = (secs if secs is not None else 0) * float(self._params.sample_rate)
+        j = secs * float(self._params.sample_rate)
         x = (j + self._params.overlap) / (self._params.fft_bin_size - self._params.overlap)
         return x
 
@@ -217,7 +217,8 @@ class SyncDetector(object):
             except ValueError:  # simply ignore
                 continue
             _result1[(ib, it)] = -self._impl.find_delay(
-                ftds[ib], ftds[it], kdm.get("min"), kdm.get("max"))
+                ftds[ib], ftds[it],
+                kdm.get("min", float('nan')), kdm.get("max", float('nan')))
         #
         _result2[(0, 0)] = 0.0
         for i in range(len(files) - 1):
