@@ -431,8 +431,8 @@ def _make_list_of_trims(definition, known_delay_map, summarizer_params, clear_ca
         # [[idx, start, end], ...]
         trims = []
         use_indexes = [0]
+        params = ins["video_mode_params"]
         if ins["video_mode"] in ("overlay", "blend"):
-            params = ins["video_mode_params"]
             # for blend, it's top layer
             use_indexes.append(ins["idx"])
             #
