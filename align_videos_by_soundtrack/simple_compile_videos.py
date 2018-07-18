@@ -266,7 +266,7 @@ def translate_definition(definition):
     #
     inputs = [  # flatten, parsed time
         {
-            "file": inp["file"],
+            "file": check_and_decode_filenames([inp["file"]], exit_if_error=True)[0],
             "v_extra_filter": inp.get("v_extra_filter"),
             "a_extra_filter": inp.get("a_extra_filter"),
             "start_time": parse_time(inp.get("start_time", 0)),
@@ -392,8 +392,7 @@ def _make_list_of_trims(definition, known_delay_map, summarizer_params, clear_ca
         return result
     #
     inputs, intercuts = translate_definition(definition)
-    files = check_and_decode_filenames(
-        [inp["file"] for inp in inputs], exit_if_error=True)
+    files = [inp["file"] for inp in inputs]
     with SyncDetector(
         params=summarizer_params,
         clear_cache=clear_cache) as sd:
