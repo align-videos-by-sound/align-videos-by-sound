@@ -35,9 +35,9 @@ from .utils import (
     json_load,
     json_loads,
     validate_type_one_by_template,
-    validate_dict_one_by_template
+    validate_dict_one_by_template,
+    validate_list_of_dict_one_by_template
     )
-#from . import _cache
 from . import cli_common
 
 
@@ -230,6 +230,24 @@ def validate_definition(definition):
                     "'intercuts[%d]'" % i,
                     c["sub_idx"]))
             sys.exit(1)
+        if c["video_mode"] == "overlay":
+            validate_list_of_dict_one_by_template(
+                c["video_mode_params"], {
+                    "mode": "...",
+                    "cropping": "...",
+                    "overlay": "...",
+                    "partner_layer": "..."
+                    }, ["overlay"],
+                """(because "video_mode" is "overlay",) \
+intercuts[%d]["video_mode_params"]""" % i, list_size_max=1)
+        elif c["video_mode"] == "blend":
+            validate_list_of_dict_one_by_template(
+                c["video_mode_params"], {
+                    "blend": "...",
+                    "bottom_layer": "..."
+                    }, ["blend"],
+                """(because "video_mode" is "blend",) \
+intercuts[%d]["video_mode_params"]""" % i, list_size_max=1)
 
 
 def _make_list_of_trims(definition, known_delay_map, summarizer_params, clear_cache):
