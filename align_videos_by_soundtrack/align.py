@@ -212,14 +212,15 @@ class SyncDetector(object):
         _result1, _result2 = {}, {}
         for kdm_key in known_delay_map.keys():
             kdm = known_delay_map[kdm_key]
-            try:
-                it = files.index(os.path.abspath(kdm_key))
-                ib = files.index(os.path.abspath(kdm["base"]))
-            except ValueError:  # simply ignore
-                continue
-            _result1[(ib, it)] = -self._impl.find_delay(
-                ftds[ib], ftds[it],
-                kdm.get("min", float('nan')), kdm.get("max", float('nan')))
+            ft = os.path.abspath(kdm_key)
+            fb = os.path.abspath(kdm["base"])
+            it_all = [i for i, f in enumerate(files) if f == ft]
+            ib_all = [i for i, f in enumerate(files) if f == fb]
+            for it in it_all:
+                for ib in ib_all:
+                    _result1[(ib, it)] = -self._impl.find_delay(
+                        ftds[ib], ftds[it],
+                        kdm.get("min", float('nan')), kdm.get("max", float('nan')))
         #
         _result2[(0, 0)] = 0.0
         for i in range(len(files) - 1):
