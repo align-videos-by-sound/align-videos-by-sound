@@ -155,6 +155,9 @@ class _FreqTransSummarizer(object):
                 """I could not find a match. Consider giving a large value to \
 "max_misalignment" if the target medias are sure to shoot the same event.""")
         #
+        if freqs_dict_orig == freqs_dict_sample:
+            return 0.0
+        #
         t_diffs = defaultdict(int)
         for key in keys:
             for x_i in freqs_dict_sample[key]:  # determine time offset
