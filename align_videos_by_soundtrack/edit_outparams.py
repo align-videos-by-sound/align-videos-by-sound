@@ -48,6 +48,16 @@ class EditorOutputParams(object):
             return EditorOutputParams(**d)
         return EditorOutputParams()
 
+    def fix_params(self, inputs_qual):
+        """
+        inputs_qual: returned from SyncDetector.summarize_stream_infos.
+        """
+        if self.fps <= 0:
+            self.fps = inputs_qual.get("max_fps", 29.97)
+        if self.sample_rate <= 0:
+            self.sample_rate = inputs_qual.get(
+                "max_sample_rate", 44100)
+
 
 if __name__ == "__main__":
     import doctest

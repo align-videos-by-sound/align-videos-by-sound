@@ -356,9 +356,9 @@ def _make_list_of_trims(definition, known_delay_map, summarizer_params, outparam
         # the difference between the trim and atrim clipping
         # width becoming bigger because the video is far coarser
         # in resolution.
-        if outparams["fps"]:
-            nvframes = np.floor(t * outparams["fps"])
-            return nvframes / outparams["fps"]
+        if outparams.fps:
+            nvframes = np.floor(t * outparams.fps)
+            return nvframes / outparams.fps
         else:
             return t
     #
@@ -402,13 +402,9 @@ def _make_list_of_trims(definition, known_delay_map, summarizer_params, outparam
 
     #
     qual = SyncDetector.summarize_stream_infos(einf)
-    if all(qual["has_video"]):
-        if "fps" not in outparams or outparams["fps"] <= 0:
-            outparams["fps"] = qual["max_fps"]
-    else:
-        outparams["fps"] = 0.
-    if "sample_rate" not in outparams or outparams["sample_rate"] <= 0:
-        outparams["sample_rate"] = qual["max_sample_rate"]
+    outparams.fix_params(qual)
+    if not all(qual["has_video"]):
+        outparams.fps = 0.
 
     # make a list of time ranges which will be used as trim, and atrim.
     trims_list = []
@@ -417,8 +413,8 @@ def _make_list_of_trims(definition, known_delay_map, summarizer_params, outparam
         if s < 0 or e < 0:
             return True
         # trim doesn't work if dur is smaller than gap between frames.
-        if outparams["fps"]:
-            return (e - s) < 1./outparams["fps"]
+        if outparams.fps:
+            return (e - s) < 1./outparams.fps
         else:
             return np.isclose(s, e)
 
@@ -532,13 +528,13 @@ def build(definition, known_delay_map, summarizer_params, outparams, clear_cache
     ftmpl = []
     for inp in inputs:
         f_v = Filter()
-        f_v.add_filter("fps", fps=outparams["fps"])
+        f_v.add_filter("fps", fps=outparams.fps)
         f_v.add_filter("scale", qual["max_width"], qual["max_height"])
         f_v.add_filter(inp.get("v_extra_filter"))
         f_v.add_filter("setpts", "PTS-STARTPTS")
         f_v.add_filter("setsar", "1")
         f_a = Filter()
-        f_a.add_filter("aresample", outparams["sample_rate"])
+        f_a.add_filter("aresample", outparams.sample_rate)
         f_a.add_filter(inp.get("a_extra_filter"))
         f_a.add_filter("asetpts", "PTS-STARTPTS")
         ftmpl.append((f_v, f_a))

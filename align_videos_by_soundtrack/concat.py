@@ -78,16 +78,13 @@ def _build(args):
     qual = SyncDetector.summarize_stream_infos(einf)
     targets_have_video = any(qual["has_video"][1:])
     outparams = args.outparams
-    if "fps" not in outparams or outparams["fps"] < 0:
-        outparams["fps"] = qual["max_fps"]
-    if "sample_rate" not in outparams or outparams["sample_rate"] < 0:
-        outparams["sample_rate"] = qual["max_sample_rate"]
+    outparams.fix_params(qual)
     bld = ConcatWithGapFilterGraphBuilder(
         "c",
         w=qual["max_width"],
         h=qual["max_height"],
-        fps=outparams["fps"],
-        sample_rate=outparams["sample_rate"])
+        fps=outparams.fps,
+        sample_rate=outparams.sample_rate)
     def _add_gap(start, gap):
         if gap > 0 and (
             not np.isclose(start, 0) or args.start_gap != "omit"):

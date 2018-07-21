@@ -174,7 +174,8 @@ Additional arguments to ffmpeg for output audio streams. Pass list in JSON forma
             args.summarizer_params)
         #
         if hasattr(args, "outparams"):
-            args.outparams = json_loads(args.outparams) if args.outparams else {}
+            args.outparams = EditorOutputParams(
+                **(json_loads(args.outparams) if args.outparams else {}))
         if hasattr(args, "a_filter_extra"):
             args.a_filter_extra = json_loads(args.a_filter_extra) if args.a_filter_extra else {}
         if hasattr(args, "v_filter_extra"):

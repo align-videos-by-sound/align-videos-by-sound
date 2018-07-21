@@ -143,17 +143,14 @@ def _build(args):
             known_delay_map=args.known_delay_map)
     qual = SyncDetector.summarize_stream_infos(ares)
     outparams = args.outparams
-    if "fps" not in outparams or outparams["fps"] <= 0:
-        outparams["fps"] = qual["max_fps"]
-    if "sample_rate" not in outparams or outparams["sample_rate"] <= 0:
-        outparams["sample_rate"] = qual["max_sample_rate"]
+    outparams.fix_params(qual)
 
     b = _StackVideosFilterGraphBuilder(
         shape=shape,
         w=args.w,
         h=args.h,
-        fps=outparams["fps"],
-        sample_rate=outparams["sample_rate"])
+        fps=outparams.fps,
+        sample_rate=outparams.sample_rate)
 
     for i, inf in enumerate(ares):
         pre, post = inf["pad"], inf["pad_post"]
