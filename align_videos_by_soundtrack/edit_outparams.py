@@ -27,12 +27,12 @@ class EditorOutputParams(object):
     Parameter used by editor scripts.
 
     You can specify sample_rate, fps. In any case, if not specified,
-    or specified less equals zero, the maximum in the input movie is used.
-    Using the maximum in the input movie can cause problems with ffmpeg.
-    Especially fps is. Perhaps due to memory problems, ffmpeg not only
-    gave errors but I also experienced a blue screen on Windows machines.
-    It may be risky to unify to the highest fps when input with various
-    fps mixed.
+    or specified less equals zero, the maximum in the input movie is used
+    for sample_rate, 29.97 for fps. Using the maximum in the input movie
+    can cause problems with ffmpeg. Especially fps is. Perhaps due to
+    memory problems, ffmpeg not only gave errors but I also experienced
+    a blue screen on Windows machines. It may be risky to unify to the
+    highest fps when input with various fps mixed.
 
     You can also specify width, and height. The point to decide from the
     input file if neither is specified is the same as fps etc. If either
