@@ -108,14 +108,16 @@ for some reason, specify this.''' % (
             "-o", "--outfile", dest="outfile", default=default,
             help="Specifying the output file. (default: %(default)s)")
 
-    def editor_add_output_params_argument(self):
+    def editor_add_output_params_argument(self, notice=""):
         default = EditorOutputParams()
         default = json.dumps(default.__dict__)
         self.add_argument(
             "--outparams",
             help="""Parameters for output. Pass in JSON format, 
 in dictionary format. For example, '{"fps": 29.97, "sample_rate": 44100}'
-etc. (default: %s).""" % default,
+etc.
+ %s
+ (default: %s).""" % (notice, default),
             default=default)
 
     def editor_add_mode_argument(self):

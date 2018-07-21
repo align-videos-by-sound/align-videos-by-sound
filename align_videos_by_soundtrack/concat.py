@@ -81,8 +81,8 @@ def _build(args):
     outparams.fix_params(qual)
     bld = ConcatWithGapFilterGraphBuilder(
         "c",
-        w=qual["max_width"],
-        h=qual["max_height"],
+        w=outparams.width,
+        h=outparams.height,
         fps=outparams.fps,
         sample_rate=outparams.sample_rate)
     def _add_gap(start, gap):

@@ -529,7 +529,7 @@ def build(definition, known_delay_map, summarizer_params, outparams, clear_cache
     for inp in inputs:
         f_v = Filter()
         f_v.add_filter("fps", fps=outparams.fps)
-        f_v.add_filter("scale", qual["max_width"], qual["max_height"])
+        f_v.add_filter("scale", outparams.width, outparams.height)
         f_v.add_filter(inp.get("v_extra_filter"))
         f_v.add_filter("setpts", "PTS-STARTPTS")
         f_v.add_filter("setsar", "1")
