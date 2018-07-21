@@ -349,16 +349,16 @@ def translate_intercuts_definition(definition, einf):
 #
 
 
-def _make_list_of_trims(definition, known_delay_map, summarizer_params, clear_cache):
+def _make_list_of_trims(definition, known_delay_map, summarizer_params, outparams, clear_cache):
     def _round_time(t):
         # Round the specified "seconds" to a multiple of the
         # time width between video frames. This is to prevent
         # the difference between the trim and atrim clipping
         # width becoming bigger because the video is far coarser
         # in resolution.
-        if qual["max_fps"]:
-            nvframes = np.floor(t * qual["max_fps"])
-            return nvframes / qual["max_fps"]
+        if outparams["fps"]:
+            nvframes = np.floor(t * outparams["fps"])
+            return nvframes / outparams["fps"]
         else:
             return t
     #
@@ -402,6 +402,14 @@ def _make_list_of_trims(definition, known_delay_map, summarizer_params, clear_ca
 
     #
     qual = SyncDetector.summarize_stream_infos(einf)
+    if all(qual["has_video"]):
+        if "fps" not in outparams or outparams["fps"] <= 0:
+            outparams["fps"] = qual["max_fps"]
+    else:
+        outparams["fps"] = 0.
+    if "sample_rate" not in outparams or outparams["sample_rate"] <= 0:
+        outparams["sample_rate"] = qual["max_sample_rate"]
+
     # make a list of time ranges which will be used as trim, and atrim.
     trims_list = []
     st_main = inputs[0]["start_time"]
@@ -409,8 +417,8 @@ def _make_list_of_trims(definition, known_delay_map, summarizer_params, clear_ca
         if s < 0 or e < 0:
             return True
         # trim doesn't work if dur is smaller than gap between frames.
-        if qual["max_fps"]:
-            return (e - s) < 1./qual["max_fps"]
+        if outparams["fps"]:
+            return (e - s) < 1./outparams["fps"]
         else:
             return np.isclose(s, e)
 
@@ -512,25 +520,25 @@ Negative time was found %s for '%s'. """,
                     "main": (0, st_main, main_dur),
                     })
 
-    return files, inputs, trims_list, qual
+    return files, inputs, trims_list, qual, outparams
 
 
-def build(definition, known_delay_map, summarizer_params, clear_cache):
+def build(definition, known_delay_map, summarizer_params, outparams, clear_cache):
     validate_definition(definition)
-    files, inputs, trims_list, qual = _make_list_of_trims(
-        definition, known_delay_map, summarizer_params, clear_cache)
+    files, inputs, trims_list, qual, outparams = _make_list_of_trims(
+        definition, known_delay_map, summarizer_params, outparams, clear_cache)
 
     # make filter templates
     ftmpl = []
     for inp in inputs:
         f_v = Filter()
-        f_v.add_filter("fps", fps=qual["max_fps"])
+        f_v.add_filter("fps", fps=outparams["fps"])
         f_v.add_filter("scale", qual["max_width"], qual["max_height"])
         f_v.add_filter(inp.get("v_extra_filter"))
         f_v.add_filter("setpts", "PTS-STARTPTS")
         f_v.add_filter("setsar", "1")
         f_a = Filter()
-        f_a.add_filter("aresample", qual["max_sample_rate"])
+        f_a.add_filter("aresample", outparams["sample_rate"])
         f_a.add_filter(inp.get("a_extra_filter"))
         f_a.add_filter("asetpts", "PTS-STARTPTS")
         ftmpl.append((f_v, f_a))
@@ -677,7 +685,7 @@ Do you scan the current directory and create an information file? [y/n] """)
     if input("""Should I fill in the default "intercuts"? [y/n] """) == "y":
         idx = 0
         dur = int(infos[0][1]["duration"])
-        for t in range(0, dur, min(dur // 2, 10)):
+        for t in range(0, dur, min(dur // 2, 5)):
             result["intercuts"].append({
                     "sub_idx": idx % len(result["inputs"]["sub"]),
                     "start_time": t,
@@ -748,6 +756,7 @@ who are only interested in the most basic use cases.
 Text (JSON) file describing the definition for indicating the intercuts \
 position.")
     parser.editor_add_output_argument(default="compiled.mp4")
+    parser.editor_add_output_params_argument()
     parser.editor_add_mode_argument()
     #####
     parser.editor_add_extra_ffargs_arguments()
@@ -761,7 +770,10 @@ position.")
 
     files, fc, vmap, amap = build(
         json_load(args.definition),
-        args.known_delay_map, args.summarizer_params, args.clear_cache)
+        args.known_delay_map,
+        args.summarizer_params,
+        args.outparams,
+        args.clear_cache)
     call_ffmpeg_with_filtercomplex(
         args.mode,
         files,

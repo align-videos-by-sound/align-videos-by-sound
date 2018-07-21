@@ -142,13 +142,18 @@ def _build(args):
             files,
             known_delay_map=args.known_delay_map)
     qual = SyncDetector.summarize_stream_infos(ares)
+    outparams = args.outparams
+    if "fps" not in outparams or outparams["fps"] <= 0:
+        outparams["fps"] = qual["max_fps"]
+    if "sample_rate" not in outparams or outparams["sample_rate"] <= 0:
+        outparams["sample_rate"] = qual["max_sample_rate"]
 
     b = _StackVideosFilterGraphBuilder(
         shape=shape,
         w=args.w,
         h=args.h,
-        fps=qual["max_fps"],
-        sample_rate=args.sample_rate if args.sample_rate else qual["max_sample_rate"])
+        fps=outparams["fps"],
+        sample_rate=outparams["sample_rate"])
 
     for i, inf in enumerate(ares):
         pre, post = inf["pad"], inf["pad_post"]
@@ -203,6 +208,7 @@ different thing from this. See the option description.""")
         "files", nargs="+",
         help="The media files which contains both video and audio.")
     parser.editor_add_output_argument(default="merged.mp4")
+    parser.editor_add_output_params_argument()
     parser.editor_add_mode_argument()
     #####
     parser.add_argument(
@@ -224,10 +230,6 @@ implies --audio_mode='indivisual'. (default: %(default)s)""")
     parser.add_argument(
         '--shape', type=str, default="[2, 2]",
         help="The shape of the tile, like '[2, 2]'. (default: %(default)s)")
-    parser.add_argument(
-        '--sample_rate', type=int, default=0,
-        help="Sampling rate of the output file. Passing zero means that \
-it takes from max sample rate of input medias. (default: %(default)d)")
     parser.add_argument(
         '--width-per-cell', dest="w", type=int, default=960,
         help="Width of the cell. (default: %(default)d)")
