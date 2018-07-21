@@ -35,9 +35,9 @@ from .utils import (
     json_load,
     json_loads,
     validate_type_one_by_template,
-    validate_dict_one_by_template
+    validate_dict_one_by_template,
+    validate_list_of_dict_one_by_template
     )
-#from . import _cache
 from . import cli_common
 
 
@@ -50,7 +50,16 @@ _sample_editinfo = """\
         "main": {
             "file": "main.mp4",
             "v_extra_filter": "",
-            "a_extra_filter": "loudnorm"
+            "a_extra_filter": "loudnorm",
+
+            /*
+             * "intercuts" also has "start_time" and "end_time",
+             * but they are for determining the insertion position.
+             * These "start_time", "end_time" can be used to decide
+             * "a range you do not want to use".
+             */
+            "start_time": "00:00:03",
+            "end_time": "00:20:00"
         },
         "sub": [
             {
@@ -110,7 +119,15 @@ _sample_editinfo = """\
              * If audio_mode is "select", you can specify "main", "sub", or
              * idx directly like [1].
              */
-            "audio_mode_params": ["main"]
+            "audio_mode_params": ["main"],
+
+            /*
+             * Apart from the "inputs" filter, extra_filter can be used
+             * for every "intercuts". In particular, sometimes you often
+             * want to use the "pan" filter after "amerge".
+             */
+            "v_extra_filter": "edgedetect",
+            "a_extra_filter": ""
         },
         {
             "sub_idx": 2,
@@ -143,7 +160,10 @@ _sample_editinfo = """\
              * If audio_mode is "amerge" or "amix", you can specify like
              * [1, 2, 3] or ["main", "sub"], etc.
              */
-            "audio_mode_params": [1, 2]
+            "audio_mode_params": [1, 2],
+
+            "v_extra_filter": "",
+            "a_extra_filter": "pan=stereo|c0<c0+c2|c1<c1+c3"
         },
         {
             "sub_idx": 2,
@@ -219,50 +239,130 @@ def validate_definition(definition):
                     "'intercuts[%d]'" % i,
                     c["sub_idx"]))
             sys.exit(1)
+        if c["video_mode"] == "overlay":
+            validate_list_of_dict_one_by_template(
+                c["video_mode_params"], {
+                    "mode": "...",
+                    "cropping": "...",
+                    "overlay": "...",
+                    "partner_layer": "..."
+                    }, ["overlay"],
+                """(because "video_mode" is "overlay",) \
+intercuts[%d]["video_mode_params"]""" % i, list_size_max=1)
+        elif c["video_mode"] == "blend":
+            validate_list_of_dict_one_by_template(
+                c["video_mode_params"], {
+                    "blend": "...",
+                    "bottom_layer": "..."
+                    }, ["blend"],
+                """(because "video_mode" is "blend",) \
+intercuts[%d]["video_mode_params"]""" % i, list_size_max=1)
 
 
-def _make_list_of_trims(definition, known_delay_map, summarizer_params, clear_cache):
+#
+def translate_inputs_definition(definition):
+    _inputs = definition["inputs"]  # as human readable
     #
-    def _translate_definition(definition):
-        _inputs = definition["inputs"]  # as human readable
-        _intercuts = definition["intercuts"]  # as human readable
+    return [  # flatten, parsed time
+        {
+            "file": check_and_decode_filenames([inp["file"]], exit_if_error=True)[0],
+            "v_extra_filter": inp.get("v_extra_filter"),
+            "a_extra_filter": inp.get("a_extra_filter"),
+            "start_time": parse_time(inp.get("start_time", 0)),
+            "end_time": parse_time(inp.get("end_time", float("inf"))),
+            }
+        for inp in [_inputs["main"]] + _inputs["sub"]]
 
-        inputs = []  # flatten
-        inputs.append(_inputs["main"])
-        inputs.extend(_inputs["sub"])
+    
+def translate_intercuts_definition(definition, einf):
+    _intercuts = definition["intercuts"]  # as human readable
+    def _get_idx(p):
+        if p == "main":
+            return 0
+        elif p == "sub":
+            return ins["idx"]
+        elif isinstance(p, (int,)):
+            return p + 1
 
-        intercuts = []  # flatten, parsed time
-        for i in range(len(_intercuts)):
-            ins = {
-                "idx": _intercuts[i]["sub_idx"] + 1,
-                "start_time": parse_time(_intercuts[i].get(
-                        "start_time", -1)),
-                "end_time": parse_time(_intercuts[i].get("end_time", -1)),
-                "time_origin": _intercuts[i].get("time_origin", "sub"),
-                "video_mode": _intercuts[i].get("video_mode", "select"),
-                "audio_mode": _intercuts[i].get("audio_mode", "select"),
-                "video_mode_params": _intercuts[i].get(
-                    "video_mode_params", []),
-                "audio_mode_params": _intercuts[i].get(
-                    "audio_mode_params", ["main"]),
-                }
-            intercuts.append(ins)
+    intercuts = []  # flatten, parsed time
+    for i in range(len(_intercuts)):
+        ins = {
+            "idx": _intercuts[i]["sub_idx"] + 1,
+            "start_time": parse_time(_intercuts[i].get(
+                    "start_time", -1)),
+            "end_time": parse_time(_intercuts[i].get("end_time", -1)),
+            "video_mode": _intercuts[i].get("video_mode", "select"),
+            "audio_mode": _intercuts[i].get("audio_mode", "select"),
+            "video_mode_params": _intercuts[i].get(
+                "video_mode_params", []),
+            "audio_mode_params": _intercuts[i].get(
+                "audio_mode_params", []),
 
-        return inputs, intercuts
-    #
+            "v_extra_filter": _intercuts[i].get(
+                "v_extra_filter", ""),
+            "a_extra_filter": _intercuts[i].get(
+                "a_extra_filter", ""),
+            }
+        off = einf[ins["idx"]]["pad"] - einf[0]["pad"]
+        dur = einf[ins["idx"]]["orig_duration"]
+        time_origin = _intercuts[i].get("time_origin", "sub")
+        maincounting = time_origin == "main"
+        # Let's fill in unspecified time. We must pay attention
+        # to `time_origin`.
+        if ins["start_time"] < 0:
+            ins["start_time"] = off if maincounting else 0
+        if ins["end_time"] < 0:
+            ins["end_time"] = dur + (off if maincounting else 0)
+        # Let's standardize the time reference to `main` counting.
+        if not maincounting:
+            ins["start_time"] += off
+            ins["end_time"] += off
+        #
+        params = ins["video_mode_params"]
+        if ins["video_mode"] in ("overlay", "blend"):
+            k = "bottom_layer"
+            if ins["video_mode"] == "overlay":
+                k = "partner_layer"
+            if k in params[0]:
+                params[0]["partner_layer"] = _get_idx(params[0].pop(k))
+        else:  # select
+            if not params:
+                params.append("sub")
+            params[0] = _get_idx(params[0])
+        ins["video_mode_params"] = params
+        #
+        params = ins["audio_mode_params"]
+        if ins["audio_mode"] in ("amerge", "amix"):
+            if not params:
+                params.extend([0, ins["idx"]])
+            else:
+                params = list(map(_get_idx, params))
+        else:  # select
+            if not params:
+                params.append("sub")
+            params[0] = _get_idx(params[0])
+        ins["audio_mode_params"] = params
+        #
+        intercuts.append(ins)
+
+    return intercuts
+#
+
+
+def _make_list_of_trims(definition, known_delay_map, summarizer_params, outparams, clear_cache):
     def _round_time(t):
         # Round the specified "seconds" to a multiple of the
         # time width between video frames. This is to prevent
         # the difference between the trim and atrim clipping
         # width becoming bigger because the video is far coarser
         # in resolution.
-        if qual["max_fps"]:
-            nvframes = np.floor(t * qual["max_fps"])
-            return nvframes / qual["max_fps"]
+        if outparams.fps:
+            nvframes = np.floor(t * outparams.fps)
+            return nvframes / outparams.fps
         else:
             return t
     #
-    def _mk_trims_table(intercuts, einf, qual):
+    def _mk_trims_table(inputs, intercuts, einf):
         # result = [
         #   [[s1, e1],...],  # for idx=0
         #   ...
@@ -271,20 +371,10 @@ def _make_list_of_trims(definition, known_delay_map, summarizer_params, clear_ca
         # ]
         _tmp = []  # for idx=0
         for ins in intercuts:
-            off = einf[ins["idx"]]["pad"] - einf[0]["pad"]
-            dur = einf[ins["idx"]]["orig_duration"]
-            maincounting = ins["time_origin"] == "main"
-            # Let's fill in unspecified time. We must pay attention
-            # to `time_origin`.
             _tmp.append([ins["start_time"], ins["end_time"]])
-            if _tmp[-1][0] < 0:
-                _tmp[-1][0] = off if maincounting else 0
-            if _tmp[-1][1] < 0:
-                _tmp[-1][1] = dur + (off if maincounting else 0)
-            # Let's standardize the time reference to `main` counting.
-            if ins["time_origin"] == "sub":
-                _tmp[-1][0] += off
-                _tmp[-1][1] += off
+            _tmp[-1][0] = max(
+                _tmp[-1][0],
+                inputs[0]["start_time"])
         # Let's make adjustments so as not to overlap. Let's give
         # priority to the material that comes later in time.
         _tmp.sort()
@@ -297,33 +387,38 @@ def _make_list_of_trims(definition, known_delay_map, summarizer_params, clear_ca
             off = einf[idx]["pad"] - einf[0]["pad"]
             result = np.vstack((result, [result[0] - off]))
         for idx in range(len(einf)):
-            dur = einf[idx]["orig_duration"]
+            off = einf[idx]["pad"] - einf[0]["pad"]
+            dur = min(einf[idx]["orig_duration"], inputs[0]["end_time"] - off)
             result[idx][np.where(result[idx] > dur)] = dur
         return result
     #
-    inputs, intercuts = _translate_definition(definition)
-    files = check_and_decode_filenames(
-        [inp["file"] for inp in inputs], exit_if_error=True)
+    inputs = translate_inputs_definition(definition)
+    files = [inp["file"] for inp in inputs]
     with SyncDetector(
         params=summarizer_params,
         clear_cache=clear_cache) as sd:
         einf = sd.align(files, known_delay_map=known_delay_map)
+    intercuts = translate_intercuts_definition(definition, einf)
 
     #
     qual = SyncDetector.summarize_stream_infos(einf)
+    outparams.fix_params(qual)
+    if not all(qual["has_video"]):
+        outparams.fps = 0.
+
     # make a list of time ranges which will be used as trim, and atrim.
     trims_list = []
-    st_main = 0
+    st_main = inputs[0]["start_time"]
     def _desired_dur_is_too_small(s, e):
         if s < 0 or e < 0:
             return True
         # trim doesn't work if dur is smaller than gap between frames.
-        if qual["max_fps"]:
-            return (e - s) < 1./qual["max_fps"]
+        if outparams.fps:
+            return (e - s) < 1./outparams.fps
         else:
             return np.isclose(s, e)
 
-    base_trims_table = _mk_trims_table(intercuts, einf, qual)
+    base_trims_table = _mk_trims_table(inputs, intercuts, einf)
     last = 0  # default bottom layer for blend
     for i, ins in enumerate(intercuts):
         if base_trims_table[0][i][0] >= base_trims_table[0][i][1]:
@@ -334,47 +429,23 @@ def _make_list_of_trims(definition, known_delay_map, summarizer_params, clear_ca
         trims_list.append({
                 k: ins[k] for k in (
                     "video_mode", "video_mode_params",
-                    "audio_mode", "audio_mode_params")
+                    "audio_mode", "audio_mode_params",
+                    "v_extra_filter", "a_extra_filter")
                 })
         # [[idx, start, end], ...]
         trims = []
         use_indexes = [0]
-        def _get_idx(p):
-            if p == "main":
-                return 0
-            elif p == "sub":
-                return ins["idx"]
-            elif isinstance(p, (int,)):
-                return p + 1
-
+        params = ins["video_mode_params"]
         if ins["video_mode"] in ("overlay", "blend"):
-            params = ins["video_mode_params"]
-
             # for blend, it's top layer
             use_indexes.append(ins["idx"])
-
-            k = "bottom_layer"
-            if ins["video_mode"] == "blend":
-                k = "bottom_layer"
-            else:
-                k = "partner_layer"
+            #
             use_indexes.append(
-                _get_idx(params[0].get(k, int(last) - 1)))
+                params[0].get("partner_layer", int(last) - 1))
         else:  # select
-            params = ins["video_mode_params"]
-            p = params[0] if params else "sub"
-            use_indexes.append(_get_idx(p))
+            use_indexes.append(params[0])
         astart_of_use_indexes = len(use_indexes)
-        if ins["audio_mode"] in ("amerge", "amix"):
-            if not ins["audio_mode_params"]:
-                use_indexes.extend([0, ins["idx"]])
-            else:
-                for p in ins["audio_mode_params"]:
-                    use_indexes.append(_get_idx(p))
-        else:  # select
-            params = ins["audio_mode_params"]
-            p = params[0] if params else "sub"
-            use_indexes.append(_get_idx(p))
+        use_indexes.extend(ins["audio_mode_params"])
         for idx in use_indexes:
             s, e = base_trims_table[idx][i]
             if (s >= 0 and e >= 0):
@@ -437,32 +508,33 @@ Negative time was found %s for '%s'. """,
             #
             trims_list[-1]["intercuts"] = res
         st_main = trims[0,2]
-    if st_main < einf[0]["orig_duration"]:
+    main_dur = min(inputs[0]["end_time"], einf[0]["orig_duration"])
+    if st_main < main_dur:
         if not _desired_dur_is_too_small(
-            st_main, einf[0]["orig_duration"]):
+            st_main, main_dur):
             trims_list.append({
-                    "main": (0, st_main, einf[0]["orig_duration"]),
+                    "main": (0, st_main, main_dur),
                     })
 
-    return files, inputs, trims_list, qual
+    return files, inputs, trims_list, qual, outparams
 
 
-def build(definition, known_delay_map, summarizer_params, clear_cache):
+def build(definition, known_delay_map, summarizer_params, outparams, clear_cache):
     validate_definition(definition)
-    files, inputs, trims_list, qual = _make_list_of_trims(
-        definition, known_delay_map, summarizer_params, clear_cache)
+    files, inputs, trims_list, qual, outparams = _make_list_of_trims(
+        definition, known_delay_map, summarizer_params, outparams, clear_cache)
 
     # make filter templates
     ftmpl = []
     for inp in inputs:
         f_v = Filter()
-        f_v.add_filter("fps", fps=qual["max_fps"])
-        f_v.add_filter("scale", qual["max_width"], qual["max_height"])
+        f_v.add_filter("fps", fps=outparams.fps)
+        f_v.add_filter("scale", outparams.width, outparams.height)
         f_v.add_filter(inp.get("v_extra_filter"))
         f_v.add_filter("setpts", "PTS-STARTPTS")
         f_v.add_filter("setsar", "1")
         f_a = Filter()
-        f_a.add_filter("aresample", qual["max_sample_rate"])
+        f_a.add_filter("aresample", outparams.sample_rate)
         f_a.add_filter(inp.get("a_extra_filter"))
         f_a.add_filter("asetpts", "PTS-STARTPTS")
         ftmpl.append((f_v, f_a))
@@ -521,14 +593,16 @@ def build(definition, known_delay_map, summarizer_params, clear_cache):
                     vfilt = ins["video_mode_params"][0]["blend"]
                 fovl.iv.append(fvs[0].ov[0])
                 fovl.iv.append(fvs[1].ov[0])
-    
+
                 fovl.add_filter(ins["video_mode"], vfilt)
+                fovl.add_filter(ins.get("v_extra_filter"))
                 fovl.append_outlabel_v()
                 fconcat.iv.append(fovl.ov[0])
                 result_fg.append(fvs[0].to_str())
                 result_fg.append(fvs[1].to_str())
                 result_fg.append(fovl.to_str())
             else:
+                fvs[0].add_filter(ins.get("v_extra_filter"))
                 fconcat.iv.append(fvs[0].ov[0])
                 result_fg.append(fvs[0].to_str())
         #
@@ -543,12 +617,14 @@ def build(definition, known_delay_map, summarizer_params, clear_cache):
             for fa in fas:
                 fam.ia.append(fa.oa[0])
             fam.add_filter(ins["audio_mode"], inputs=len(fas))
+            fam.add_filter(ins.get("a_extra_filter"))
             fam.append_outlabel_a()
             for fa in fas:
                 result_fg.append(fa.to_str())
             result_fg.append(fam.to_str())
             fconcat.ia.append(fam.oa[0])
         else:
+            fas[0].add_filter(ins.get("a_extra_filter"))
             result_fg.append(fas[0].to_str())
             fconcat.ia.append(fas[0].oa[0])
 
@@ -605,7 +681,7 @@ Do you scan the current directory and create an information file? [y/n] """)
     if input("""Should I fill in the default "intercuts"? [y/n] """) == "y":
         idx = 0
         dur = int(infos[0][1]["duration"])
-        for t in range(0, dur, min(dur // 2, 10)):
+        for t in range(0, dur, min(dur // 2, 5)):
             result["intercuts"].append({
                     "sub_idx": idx % len(result["inputs"]["sub"]),
                     "start_time": t,
@@ -676,6 +752,7 @@ who are only interested in the most basic use cases.
 Text (JSON) file describing the definition for indicating the intercuts \
 position.")
     parser.editor_add_output_argument(default="compiled.mp4")
+    parser.editor_add_output_params_argument()
     parser.editor_add_mode_argument()
     #####
     parser.editor_add_extra_ffargs_arguments()
@@ -689,15 +766,16 @@ position.")
 
     files, fc, vmap, amap = build(
         json_load(args.definition),
-        args.known_delay_map, args.summarizer_params, args.clear_cache)
-    v_extra_ffargs = args.v_extra_ffargs if vmap else []
-    a_extra_ffargs = args.a_extra_ffargs if amap else []
+        args.known_delay_map,
+        args.summarizer_params,
+        args.outparams,
+        args.clear_cache)
     call_ffmpeg_with_filtercomplex(
         args.mode,
         files,
         fc,
-        v_extra_ffargs + a_extra_ffargs,
-        zip(vmap, amap) if vmap else [amap],
+        vmap, amap,
+        args.v_extra_ffargs, args.a_extra_ffargs,
         [args.outfile])
 
 

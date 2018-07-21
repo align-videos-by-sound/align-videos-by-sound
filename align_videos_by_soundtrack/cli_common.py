@@ -15,6 +15,7 @@ import logging
 import os
 
 from .align_params import SyncDetectorSummarizerParams
+from .edit_outparams import EditorOutputParams
 from . import _cache
 from .utils import json_loads
 
@@ -107,6 +108,18 @@ for some reason, specify this.''' % (
             "-o", "--outfile", dest="outfile", default=default,
             help="Specifying the output file. (default: %(default)s)")
 
+    def editor_add_output_params_argument(self, notice=""):
+        default = EditorOutputParams()
+        default = json.dumps(default.__dict__)
+        self.add_argument(
+            "--outparams",
+            help="""Parameters for output. Pass in JSON format, 
+in dictionary format. For example, '{"fps": 29.97, "sample_rate": 44100}'
+etc.
+ %s
+ (default: %s).""" % (notice, default),
+            default=default)
+
     def editor_add_mode_argument(self):
         self.add_argument(
             '--mode', choices=['script_bash', 'script_python', 'direct'], default='script_bash',
@@ -162,6 +175,8 @@ Additional arguments to ffmpeg for output audio streams. Pass list in JSON forma
         args.summarizer_params = SyncDetectorSummarizerParams.from_json(
             args.summarizer_params)
         #
+        if hasattr(args, "outparams"):
+            args.outparams = EditorOutputParams.from_json(args.outparams)
         if hasattr(args, "a_filter_extra"):
             args.a_filter_extra = json_loads(args.a_filter_extra) if args.a_filter_extra else {}
         if hasattr(args, "v_filter_extra"):

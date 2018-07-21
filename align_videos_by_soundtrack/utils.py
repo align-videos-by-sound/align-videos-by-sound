@@ -17,6 +17,9 @@ __all__ = [
     "check_and_decode_filenames",
     "json_load",
     "json_loads",
+    "validate_type_one_by_template",
+    "validate_dict_one_by_template",
+    "validate_list_of_dict_one_by_template",
     ]
 
 _logger = logging.getLogger(__name__)
@@ -85,11 +88,27 @@ def json_load(jsonfilename):
 # Validation helpers
 #
 def validate_type_one_by_template(
-    chktrg, tmpl, depthstr="", not_empty=True, exit_on_error=True):
+    chktrg, tmpl, depthstr="",
+    size_min=1, size_max=-1, exit_on_error=True):
 
-    if type(chktrg) != type(tmpl) or not chktrg:
+    if type(chktrg) != type(tmpl):
         _logger.error("""%s must be %s""" % (
                 depthstr, type(tmpl)))
+        if exit_on_error:
+            sys.exit(1)
+        return False
+    if ((size_min > 0 and len(chktrg) < size_min) or (
+            size_max > 0 and len(chktrg) > size_max)):
+        if size_min > 0 and size_max <= 0:
+            bs = "greater equal than %d" % size_min
+        elif size_min <= 0 and size_max > 0:
+            bs = "less equal than %d" % size_max
+        elif size_min == size_max:
+            bs = "%d" % (size_min)
+        else:
+            bs = "between %d and %d" % (size_min, size_max)
+        _logger.error("""The length of %s must be %s""" % (
+                depthstr, bs))
         if exit_on_error:
             sys.exit(1)
         return False
@@ -100,7 +119,9 @@ def validate_dict_one_by_template(
     chktrg, tmpl, mandkeys=[], depthstr="", not_empty=True, exit_on_error=True):
 
     if not validate_type_one_by_template(
-        chktrg, tmpl, depthstr, not_empty, exit_on_error):
+        chktrg, tmpl, depthstr,
+        size_min=1 if (not_empty or mandkeys) else 0,
+        exit_on_error=exit_on_error):
         return False
     depthstr = "in %s" % depthstr if depthstr else ""
     for mk in mandkeys:
@@ -118,6 +139,26 @@ def validate_dict_one_by_template(
         if exit_on_error:
             sys.exit(1)
         return False
+    return True
+
+
+def validate_list_of_dict_one_by_template(
+    chktrg, itemdict_tmpl, itemdict_mandkeys=[], depthstr="",
+    list_size_min=1, list_size_max=-1,
+    itemdict_not_empty=True, exit_on_error=True):
+
+    if not validate_type_one_by_template(
+        chktrg, [itemdict_tmpl], depthstr,
+        list_size_min, list_size_max, exit_on_error):
+        return False
+
+    for i, td in enumerate(chktrg):
+        if not validate_dict_one_by_template(
+            td, itemdict_tmpl, itemdict_mandkeys,
+            depthstr + "[%d]" % i,
+            itemdict_not_empty,
+            exit_on_error):
+            return False
     return True
 
 

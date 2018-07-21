@@ -436,28 +436,45 @@ def call_ffmpeg_with_filtercomplex(
     mode,
     inputfiles,
     filter_complex,
-    extra_ffargs,
-    maps,  # [("[v0]", "[a0]"), ("[v1]", "[a1]"), ("[v2]", "[a2]"), ...]
+    vmap,  # ["[v0]", "[v1]", ...]
+    amap,  # ["[a0]", "[a1]", ...]
+    v_extra_ffargs,
+    a_extra_ffargs,
     outfiles):
     """
     Call ffmpeg or print a `bash` script.
 
-    Calling ffmpeg is complicated, such as extremely delicate argument order,
-    or there are also too flexible aliases, and enormous variation calling
-    is possible if including up to deprecated options. but if it is called
-    only by `-filter_complex` and` -map`, it is almost the same way of calling it.
+    Calling ffmpeg is complicated, such as extremely delicate argument
+    order, or there are also too flexible aliases, and enormous variation
+    calling is possible if including up to deprecated options. but if it
+    is called only by `-filter_complex` and` -map`, it is almost the same
+    way of calling it.
     """
     ifile_args = chain.from_iterable([('-i', f) for f in inputfiles])
+    #
+    if vmap:
+        maps = zip(vmap, amap)  # [("[v0]", "[a0]"), ("[v1]", "[a1]"), ...]
+    elif amap:
+        maps = [amap]
+    else:
+        raise ValueError("no maps")
+    v_extra_ffargs = v_extra_ffargs if vmap else []
+    a_extra_ffargs = a_extra_ffargs if amap else []
+
+    extra_ffargs = v_extra_ffargs + a_extra_ffargs
+    #
     if len(outfiles) > 1:
         map_args = []
         for zi in zip(maps, outfiles):
-            map_args.extend(chain.from_iterable([("-map", m) for m in zi[0] if m]))
+            map_args.extend(chain.from_iterable(
+                    [("-map", m) for m in zi[0] if m]))
             map_args.extend(extra_ffargs)
             map_args.append(zi[1])
     else:
         map_args = []
         for mi in maps:
-            map_args.extend(chain.from_iterable([("-map", m) for m in mi if m]))
+            map_args.extend(chain.from_iterable(
+                    [("-map", m) for m in mi if m]))
         map_args.extend(extra_ffargs)
         map_args.append(outfiles[0])
     #
@@ -471,7 +488,7 @@ def call_ffmpeg_with_filtercomplex(
 #! /bin/sh
 # -*- coding: utf-8 -*-
 
-ffmpeg -y \\
+ffmpeg -hide_banner -y \\
   {} \\
   -filter_complex "
 {}
@@ -480,7 +497,7 @@ ffmpeg -y \\
            filter_complex,
            " ".join(_quote.map(map_args))).encode("utf-8"))
     else:
-        cmd = ["ffmpeg", "-y"]
+        cmd = ["ffmpeg", "-hide_banner", "-y"]
         cmd.extend(ifile_args)
         cmd.extend(["-filter_complex", filter_complex])
         cmd.extend(map_args)

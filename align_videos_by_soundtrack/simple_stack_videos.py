@@ -142,13 +142,15 @@ def _build(args):
             files,
             known_delay_map=args.known_delay_map)
     qual = SyncDetector.summarize_stream_infos(ares)
+    outparams = args.outparams
+    outparams.fix_params(qual)
 
     b = _StackVideosFilterGraphBuilder(
         shape=shape,
         w=args.w,
         h=args.h,
-        fps=qual["max_fps"],
-        sample_rate=args.sample_rate if args.sample_rate else qual["max_sample_rate"])
+        fps=outparams.fps,
+        sample_rate=outparams.sample_rate)
 
     for i, inf in enumerate(ares):
         pre, post = inf["pad"], inf["pad_post"]
@@ -203,6 +205,8 @@ different thing from this. See the option description.""")
         "files", nargs="+",
         help="The media files which contains both video and audio.")
     parser.editor_add_output_argument(default="merged.mp4")
+    parser.editor_add_output_params_argument(
+        notice="Note: In this script, width and height are ignored.")
     parser.editor_add_mode_argument()
     #####
     parser.add_argument(
@@ -225,10 +229,6 @@ implies --audio_mode='indivisual'. (default: %(default)s)""")
         '--shape', type=str, default="[2, 2]",
         help="The shape of the tile, like '[2, 2]'. (default: %(default)s)")
     parser.add_argument(
-        '--sample_rate', type=int, default=0,
-        help="Sampling rate of the output file. Passing zero means that \
-it takes from max sample rate of input medias. (default: %(default)d)")
-    parser.add_argument(
         '--width-per-cell', dest="w", type=int, default=960,
         help="Width of the cell. (default: %(default)d)")
     parser.add_argument(
@@ -241,8 +241,6 @@ it takes from max sample rate of input medias. (default: %(default)d)")
     cli_common.logger_config()
     
     files, fc, (vmap, amap) = _build(args)
-    v_extra_ffargs = args.v_extra_ffargs if vmap else []
-    a_extra_ffargs = args.a_extra_ffargs if amap else []
     if args.video_mode == 'indivisual' or args.audio_mode == 'indivisual':
         outbase, outext = os.path.splitext(args.outfile)
         outfiles = ["{}_{:02d}{}".format(outbase, i, outext)
@@ -254,8 +252,8 @@ it takes from max sample rate of input medias. (default: %(default)d)")
         args.mode,
         files,
         fc,
-        v_extra_ffargs + a_extra_ffargs,
-        zip(vmap, amap),
+        vmap, amap,
+        args.v_extra_ffargs, args.a_extra_ffargs,
         outfiles)
 
 

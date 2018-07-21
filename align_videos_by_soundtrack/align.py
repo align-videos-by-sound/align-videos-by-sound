@@ -90,7 +90,7 @@ class _FreqTransSummarizer(object):
         return freqs_dict
 
     def _secs_to_x(self, secs):
-        j = (secs if secs is not None else 0) * float(self._params.sample_rate)
+        j = secs * float(self._params.sample_rate)
         x = (j + self._params.overlap) / (self._params.fft_bin_size - self._params.overlap)
         return x
 
@@ -155,6 +155,9 @@ class _FreqTransSummarizer(object):
                 """I could not find a match. Consider giving a large value to \
 "max_misalignment" if the target medias are sure to shoot the same event.""")
         #
+        if freqs_dict_orig == freqs_dict_sample:
+            return 0.0
+        #
         t_diffs = defaultdict(int)
         for key in keys:
             for x_i in freqs_dict_sample[key]:  # determine time offset
@@ -162,14 +165,15 @@ class _FreqTransSummarizer(object):
                     delta_t = x_i - x_j
                     mincond_ok = math.isnan(min_delay) or delta_t >= min_delay
                     maxcond_ok = math.isnan(max_delay) or delta_t <= max_delay
-                    inc = 1 if mincond_ok and maxcond_ok else 0
-                    t_diffs[delta_t] += inc
-    
-        t_diffs_sorted = sorted(list(t_diffs.items()), key=lambda x: x[1])
-        # _logger.debug(t_diffs_sorted)
-        time_delay = t_diffs_sorted[-1][0]
-
-        return self._x_to_secs(time_delay)
+                    if mincond_ok and maxcond_ok:
+                        t_diffs[delta_t] += 1
+        try:
+            return self._x_to_secs(
+                sorted(list(t_diffs.items()), key=lambda x: -x[1])[0][0])
+        except IndexError as e:
+            raise Exception(
+                """I could not find a match. \
+Are the target medias sure to shoot the same event?""")
 
 
 class SyncDetector(object):
@@ -211,13 +215,15 @@ class SyncDetector(object):
         _result1, _result2 = {}, {}
         for kdm_key in known_delay_map.keys():
             kdm = known_delay_map[kdm_key]
-            try:
-                it = files.index(os.path.abspath(kdm_key))
-                ib = files.index(os.path.abspath(kdm["base"]))
-            except ValueError:  # simply ignore
-                continue
-            _result1[(ib, it)] = -self._impl.find_delay(
-                ftds[ib], ftds[it], kdm.get("min"), kdm.get("max"))
+            ft = os.path.abspath(kdm_key)
+            fb = os.path.abspath(kdm["base"])
+            it_all = [i for i, f in enumerate(files) if f == ft]
+            ib_all = [i for i, f in enumerate(files) if f == fb]
+            for it in it_all:
+                for ib in ib_all:
+                    _result1[(ib, it)] = -self._impl.find_delay(
+                        ftds[ib], ftds[it],
+                        kdm.get("min", float('nan')), kdm.get("max", float('nan')))
         #
         _result2[(0, 0)] = 0.0
         for i in range(len(files) - 1):
