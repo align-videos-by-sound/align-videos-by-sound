@@ -9,6 +9,7 @@ from __future__ import absolute_import
 from itertools import chain
 from collections import defaultdict
 import logging
+import numpy as np  # for base_repr
 
 __all__ = [
     "mk_single_filter_body",
@@ -115,17 +116,17 @@ class Filter(object):
             self._filters.insert(
                 i, mk_single_filter_body(name, *args, **kwargs))
 
-    def append_outlabel_v(self, templ="[v%(counter)d]"):
+    def append_outlabel_v(self, templ="[v%(counter)s]"):
         global _olab_counter
         _olab_counter[templ] += 1
         self.ov.append(templ % dict(
-                counter=_olab_counter[templ]))
+                counter=np.base_repr(_olab_counter[templ], 36)))
 
-    def append_outlabel_a(self, templ="[a%(counter)d]"):
+    def append_outlabel_a(self, templ="[a%(counter)s]"):
         global _olab_counter
         _olab_counter[templ] += 1
         self.oa.append(templ % dict(
-                counter=_olab_counter[templ]))
+                counter=np.base_repr(_olab_counter[templ], 36)))
 
     def to_str(self):
         ilabs = self._labels_to_str(self.iv, self.ia)
