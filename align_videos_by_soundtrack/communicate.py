@@ -9,9 +9,11 @@ from __future__ import absolute_import
 
 import subprocess
 import sys
+import io
 import os
 import re
 import json
+import hashlib
 import logging
 from itertools import chain
 
@@ -490,38 +492,63 @@ def call_ffmpeg_with_filtercomplex(
 
 ffmpeg -hide_banner -y \\
   {} \\
-  -filter_complex "
+  -filter_complex_script pipe: \\
+  {} << __END__
 {}
-" {}
+__END__
 """.format(" ".join(_quote.map(ifile_args)),
-           filter_complex,
-           " ".join(_quote.map(map_args))).encode("utf-8"))
+           " ".join(_quote.map(map_args)),
+           filter_complex).encode("utf-8"))
     else:
         cmd = ["ffmpeg", "-hide_banner", "-y"]
         cmd.extend(ifile_args)
-        cmd.extend(["-filter_complex", filter_complex])
+
+        # If you do, you can give `stdin = io.BytesIO (...)` to
+        # check_call (like a bash script). However on Windows,
+        # you can not give file-like objects that do not support
+        # fileno() as stdin. So, what we can do is to create a
+        # temporary file and give it.
+        d = hashlib.md5()
+        [d.update(c.encode("utf-8")) for c in cmd + map_args]
+        tempfn = os.path.join(
+            os.environ.get("TEMP", "/tmp"),
+            d.hexdigest() + ".txt")
+        cmd.extend(["-filter_complex_script", tempfn])
         cmd.extend(map_args)
         if mode == "script_python":
             cmdstr = json.dumps(cmd, indent=4)
-            cmdstr = re.sub(
-                r'''".*\\n.*"''',
-                lambda m: '""' + m.group(0).replace("\\n", "\n") + '""',
-                cmdstr)
             buf.write("""\
 #! /bin/env python
 # -*- coding: utf-8 -*-
 from __future__ import unicode_literals
 from __future__ import absolute_import
 
+import os
+import io
 from align_videos_by_soundtrack.communicate import check_call
+
+filter_complex = '''\\
+{}'''
+
+tempfn = {}
+with io.open(tempfn, "w") as fo:
+    fo.write(filter_complex)
 
 cmd = {}
 
 #
-check_call(cmd)
-""".format(cmdstr).encode("utf-8"))
+try:
+    check_call(cmd)
+finally:
+    os.remove(tempfn)
+""".format(filter_complex, json.dumps(tempfn), cmdstr).encode("utf-8"))
         else:
-            check_call(cmd)
+            with io.open(tempfn, "w") as fo:
+                fo.write(filter_complex)
+            try:
+                check_call(cmd)
+            finally:
+                os.remove(tempfn)
 
 
 if __name__ == '__main__':
