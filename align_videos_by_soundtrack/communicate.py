@@ -540,7 +540,10 @@ cmd = {}
 try:
     check_call(cmd)
 finally:
-    os.remove(tempfn)
+    try:
+        os.remove(tempfn)
+    except Exception:
+        pass
 """.format(filter_complex, json.dumps(tempfn), cmdstr).encode("utf-8"))
         else:
             with io.open(tempfn, "w") as fo:
@@ -548,8 +551,10 @@ finally:
             try:
                 check_call(cmd)
             finally:
-                os.remove(tempfn)
-
+                try:
+                    os.remove(tempfn)
+                except Exception:
+                    pass
 
 if __name__ == '__main__':
     import doctest
