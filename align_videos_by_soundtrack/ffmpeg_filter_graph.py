@@ -9,6 +9,7 @@ from __future__ import absolute_import
 from itertools import chain
 from collections import defaultdict
 import logging
+import numpy as np  # for base_repr
 
 __all__ = [
     "mk_single_filter_body",
@@ -115,17 +116,17 @@ class Filter(object):
             self._filters.insert(
                 i, mk_single_filter_body(name, *args, **kwargs))
 
-    def append_outlabel_v(self, templ="[v%(counter)d]"):
+    def append_outlabel_v(self, templ="[v%(counter)s]"):
         global _olab_counter
         _olab_counter[templ] += 1
         self.ov.append(templ % dict(
-                counter=_olab_counter[templ]))
+                counter=np.base_repr(_olab_counter[templ], 36)))
 
-    def append_outlabel_a(self, templ="[a%(counter)d]"):
+    def append_outlabel_a(self, templ="[a%(counter)s]"):
         global _olab_counter
         _olab_counter[templ] += 1
         self.oa.append(templ % dict(
-                counter=_olab_counter[templ]))
+                counter=np.base_repr(_olab_counter[templ], 36)))
 
     def to_str(self):
         ilabs = self._labels_to_str(self.iv, self.ia)
@@ -191,8 +192,10 @@ class ConcatWithGapFilterGraphBuilder(object):
         if duration <= 0:
             return self
         self._result.append(
-            self._tmpl_gapv[0].format(gapno=self._gapno, duration=duration))
-        self._fconcat.iv.append(self._tmpl_gapv[1].format(gapno=self._gapno))
+            self._tmpl_gapv[0].format(
+                gapno=np.base_repr(self._gapno, 36), duration=duration))
+        self._fconcat.iv.append(self._tmpl_gapv[1].format(
+                gapno=np.base_repr(self._gapno, 36)))
         self._gapno += 1
 
         return self
@@ -201,8 +204,10 @@ class ConcatWithGapFilterGraphBuilder(object):
         if duration <= 0:
             return self
         self._result.append(
-            self._tmpl_gapa[0].format(gapno=self._gapno, duration=duration))
-        self._fconcat.ia.append(self._tmpl_gapa[1].format(gapno=self._gapno))
+            self._tmpl_gapa[0].format(
+                gapno=np.base_repr(self._gapno, 36), duration=duration))
+        self._fconcat.ia.append(self._tmpl_gapa[1].format(
+                gapno=np.base_repr(self._gapno, 36)))
         self._gapno += 1
 
         return self
@@ -211,9 +216,10 @@ class ConcatWithGapFilterGraphBuilder(object):
         self._result.append(
             self._bodyv[0].format(
                 stream_no=stream_no,
-                bodyident=self._numbody,
+                bodyident=np.base_repr(self._numbody, 36),
                 v_filter_extra=v_filter_extra + "," if v_filter_extra else ""))
-        self._fconcat.iv.append(self._bodyv[1].format(bodyident=self._numbody))
+        self._fconcat.iv.append(self._bodyv[1].format(
+                bodyident=np.base_repr(self._numbody, 36)))
         self._numbody += 1
 
         return self
@@ -222,9 +228,10 @@ class ConcatWithGapFilterGraphBuilder(object):
         self._result.append(
             self._bodya[0].format(
                 stream_no=stream_no,
-                bodyident=self._numbody,
+                bodyident=np.base_repr(self._numbody, 36),
                 a_filter_extra=a_filter_extra + "," if a_filter_extra else ""))
-        self._fconcat.ia.append(self._bodya[1].format(bodyident=self._numbody))
+        self._fconcat.ia.append(self._bodya[1].format(
+                bodyident=np.base_repr(self._numbody, 36)))
         self._numbody += 1
 
         return self
