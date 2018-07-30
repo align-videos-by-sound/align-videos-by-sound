@@ -192,8 +192,10 @@ class ConcatWithGapFilterGraphBuilder(object):
         if duration <= 0:
             return self
         self._result.append(
-            self._tmpl_gapv[0].format(gapno=self._gapno, duration=duration))
-        self._fconcat.iv.append(self._tmpl_gapv[1].format(gapno=self._gapno))
+            self._tmpl_gapv[0].format(
+                gapno=np.base_repr(self._gapno, 36), duration=duration))
+        self._fconcat.iv.append(self._tmpl_gapv[1].format(
+                gapno=np.base_repr(self._gapno, 36)))
         self._gapno += 1
 
         return self
@@ -202,8 +204,10 @@ class ConcatWithGapFilterGraphBuilder(object):
         if duration <= 0:
             return self
         self._result.append(
-            self._tmpl_gapa[0].format(gapno=self._gapno, duration=duration))
-        self._fconcat.ia.append(self._tmpl_gapa[1].format(gapno=self._gapno))
+            self._tmpl_gapa[0].format(
+                gapno=np.base_repr(self._gapno, 36), duration=duration))
+        self._fconcat.ia.append(self._tmpl_gapa[1].format(
+                gapno=np.base_repr(self._gapno, 36)))
         self._gapno += 1
 
         return self
@@ -212,9 +216,10 @@ class ConcatWithGapFilterGraphBuilder(object):
         self._result.append(
             self._bodyv[0].format(
                 stream_no=stream_no,
-                bodyident=self._numbody,
+                bodyident=np.base_repr(self._numbody, 36),
                 v_filter_extra=v_filter_extra + "," if v_filter_extra else ""))
-        self._fconcat.iv.append(self._bodyv[1].format(bodyident=self._numbody))
+        self._fconcat.iv.append(self._bodyv[1].format(
+                bodyident=np.base_repr(self._numbody, 36)))
         self._numbody += 1
 
         return self
@@ -223,9 +228,10 @@ class ConcatWithGapFilterGraphBuilder(object):
         self._result.append(
             self._bodya[0].format(
                 stream_no=stream_no,
-                bodyident=self._numbody,
+                bodyident=np.base_repr(self._numbody, 36),
                 a_filter_extra=a_filter_extra + "," if a_filter_extra else ""))
-        self._fconcat.ia.append(self._bodya[1].format(bodyident=self._numbody))
+        self._fconcat.ia.append(self._bodya[1].format(
+                bodyident=np.base_repr(self._numbody, 36)))
         self._numbody += 1
 
         return self
