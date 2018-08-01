@@ -242,10 +242,12 @@ class SyncDetector(object):
         # _______________^^^^^^^^[0, 3] must be calculated by [0, 2], and [2, 3]
         for ib, it in sorted(_result1.keys()):
             for i in range(len(files) - 1):
-                if ib > 0 and it == i + 1 and (0, i + 1) not in _result1 and (i + 1, 0) not in _result1:
-                    _result2[(0, it)] = _result2[(0, ib)] - _result1[(ib, it)]
-                elif it > 0 and ib == i + 1 and (0, i + 1) not in _result1 and (i + 1, 0) not in _result1:
-                    _result2[(0, ib)] = _result2[(0, it)] + _result1[(ib, it)]
+                if it == i + 1 and (0, i + 1) not in _result1 and (i + 1, 0) not in _result1:
+                    if files[0] != files[it]:
+                        _result2[(0, it)] = _result2[(0, ib)] - _result1[(ib, it)]
+                elif ib == i + 1 and (0, i + 1) not in _result1 and (i + 1, 0) not in _result1:
+                    if files[0] != files[ib]:
+                        _result2[(0, ib)] = _result2[(0, it)] + _result1[(ib, it)]
 
         # build result
         result = np.array([_result2[k] for k in sorted(_result2.keys())])
