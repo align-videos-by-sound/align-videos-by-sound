@@ -684,7 +684,7 @@ Do you scan the current directory and create an information file? [y/n] """)
         for t in range(0, dur, min(dur // 2, 5)):
             result["intercuts"].append({
                     "sub_idx": idx % len(result["inputs"]["sub"]),
-                    "start_time": t,
+                    "start_time": duration_to_hhmmss(t),
                     "time_origin": "main",
                     "video_mode": "select",
                     "video_mode_params": ["sub"],
