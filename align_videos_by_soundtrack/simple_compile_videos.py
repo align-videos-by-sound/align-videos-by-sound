@@ -665,34 +665,46 @@ Do you scan the current directory and create an information file? [y/n] """)
         if list(glob(pat)):
             break
     files = [main_media] + list(glob(pat))
-    with SyncDetector() as sd:
+    with SyncDetector(
+        params=args.summarizer_params,
+        clear_cache=args.clear_cache) as sd:
         infos = list(zip(files, sd.get_media_info(files)))
-    infos[1:] = list(sorted(infos[1:], key=lambda x: -x[1]["duration"]))
-    result = {
-        "inputs": {
-            "main": {
-                "file": infos[0][0],
+        infos[1:] = list(sorted(infos[1:], key=lambda x: -x[1]["duration"]))
+        files = [inf[0] for inf in infos]  # re-ordered
+        result = {
+            "inputs": {
+                "main": {
+                    "file": infos[0][0],
+                    },
+                "sub": [{"file": inf[0],}
+                        for inf in infos[1:]]
                 },
-            "sub": [{"file": inf[0],}
-                    for inf in infos[1:]]
-            },
-        "intercuts": [],
-        }
-    if input("""Should I fill in the default "intercuts"? [y/n] """) == "y":
-        idx = 0
-        dur = int(infos[0][1]["duration"])
-        step = 5
-        for t in range(0, dur, step):
-            result["intercuts"].append({
-                    "sub_idx": idx % len(result["inputs"]["sub"]),
-                    "start_time": duration_to_hhmmss(t),
-                    "time_origin": "main",
-                    "video_mode": "select",
-                    "video_mode_params": ["sub"],
-                    "audio_mode": "select",
-                    "audio_mode_params": ["sub"],
-                    })
-            idx += 1
+            "intercuts": [],
+            }
+        if input("""Should I fill in the default "intercuts"? [y/n] """) == "y":
+            einf = sd.align(
+                files,
+                known_delay_map=args.known_delay_map)
+            idx = 0
+            dur = int(infos[0][1]["duration"])
+            step = 5
+            for t in range(0, dur, step):
+                cands = [i for i, ta in [(i, t - (einf[i + 1]["pad"] - einf[0]["pad"]))
+                         for i in range(len(result["inputs"]["sub"]))]
+                         if ta + step < einf[i + 1]["orig_duration"] and \
+                             ta >= 0 and ta + step >= 0]
+                if not cands:
+                    continue
+                result["intercuts"].append({
+                        "sub_idx": cands[idx % len(cands)],
+                        "start_time": duration_to_hhmmss(t),
+                        "time_origin": "main",
+                        "video_mode": "select",
+                        "video_mode_params": ["sub"],
+                        "audio_mode": "select",
+                        "audio_mode_params": ["sub"],
+                        })
+                idx += 1
 
     ofn = input("""\
 What sort of name will you save this definition? [default: sample.json] """)
