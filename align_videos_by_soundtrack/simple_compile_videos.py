@@ -420,6 +420,37 @@ def _make_list_of_trims(definition, known_delay_map, summarizer_params, outparam
 
     base_trims_table = _mk_trims_table(inputs, intercuts, einf)
     last = 0  # default bottom layer for blend
+    def _get_trims(i, idx):
+        s, e = base_trims_table[idx][i]
+        if (s >= 0 and e >= 0):
+            return (idx, s, e)
+        else:
+            # If the start time or end time are negative,
+            # that is, if this sub material does not exist
+            # at that time (at "main" counting), let's replace
+            # it with the other material with warning.
+            # Funny things happen, such as overlaying "main"
+            # on "main", or amergeing "main" and "main"
+            # depending on user's instructions, but I do not
+            # mind as long as a warning is issued.
+            for alt in range(len(base_trims_table)):
+                sa, ea = base_trims_table[alt][i]
+                if (sa >= 0 and ea >= 0):
+                    _logger.warn("""\
+Negative time was found %s for '%s'. \
+We used '%s' %s instead.""",
+                                 duration_to_hhmmss(s, e),
+                                 os.path.basename(files[idx]),
+                                 os.path.basename(files[alt]),
+                                 duration_to_hhmmss(sa, ea))
+                    return (alt, sa, ea)
+            else:
+                _logger.error("""\
+Negative time was found %s for '%s'. """,
+                              duration_to_hhmmss(s, e),
+                              os.path.basename(files[idx]))
+                sys.exit(1)
+
     for i, ins in enumerate(intercuts):
         if base_trims_table[0][i][0] >= base_trims_table[0][i][1]:
             # Start >= end, that is, it was completely filled in
@@ -447,36 +478,7 @@ def _make_list_of_trims(definition, known_delay_map, summarizer_params, outparam
         astart_of_use_indexes = len(use_indexes)
         use_indexes.extend(ins["audio_mode_params"])
         for idx in use_indexes:
-            s, e = base_trims_table[idx][i]
-            if (s >= 0 and e >= 0):
-                trims.append((idx, s, e))
-            else:
-                # If the start time or end time are negative,
-                # that is, if this sub material does not exist
-                # at that time (at "main" counting), let's replace
-                # it with the other material with warning.
-                # Funny things happen, such as overlaying "main"
-                # on "main", or amergeing "main" and "main"
-                # depending on user's instructions, but I do not
-                # mind as long as a warning is issued.
-                for alt in range(len(base_trims_table)):
-                    sa, ea = base_trims_table[alt][i]
-                    if (sa >= 0 and ea >= 0):
-                        _logger.warn("""\
-Negative time was found %s for '%s'. \
-We used '%s' %s instead.""",
-                                     duration_to_hhmmss(s, e),
-                                     os.path.basename(files[idx]),
-                                     os.path.basename(files[alt]),
-                                     duration_to_hhmmss(sa, ea))
-                        trims.append((alt, sa, ea))
-                        break
-                else:
-                    _logger.error("""\
-Negative time was found %s for '%s'. """,
-                                  duration_to_hhmmss(s, e),
-                                  os.path.basename(files[idx]))
-                    sys.exit(1)
+            trims.append(_get_trims(i, idx))
         trims = np.array(trims)
         trims[:,2] = trims[:,1] + (trims[:,2] - trims[:,1]).min()
         if not _desired_dur_is_too_small(st_main, trims[0,1]):
