@@ -242,18 +242,20 @@ class SyncDetector(object):
         # _______________^^^^^^^^[0, 3] must be calculated by [0, 2], and [2, 3]
         for ib, it in sorted(_result1.keys()):
             for i in range(len(files) - 1):
-                if ib > 0 and it == i + 1 and (0, i + 1) not in _result1 and (i + 1, 0) not in _result1:
-                    _result2[(0, it)] = _result2[(0, ib)] - _result1[(ib, it)]
-                elif it > 0 and ib == i + 1 and (0, i + 1) not in _result1 and (i + 1, 0) not in _result1:
-                    _result2[(0, ib)] = _result2[(0, it)] + _result1[(ib, it)]
+                if it == i + 1 and (0, i + 1) not in _result1 and (i + 1, 0) not in _result1:
+                    if files[0] != files[it]:
+                        _result2[(0, it)] = _result2[(0, ib)] - _result1[(ib, it)]
+                elif ib == i + 1 and (0, i + 1) not in _result1 and (i + 1, 0) not in _result1:
+                    if files[0] != files[ib]:
+                        _result2[(0, ib)] = _result2[(0, it)] + _result1[(ib, it)]
 
         # build result
         result = np.array([_result2[k] for k in sorted(_result2.keys())])
         pad_pre = result - result.min()
         _logger.debug(
-            list(zip(
+            list(sorted(zip(
                     map(os.path.basename, files),
-                    ["%.3f" % pp for pp in pad_pre])))  #
+                    [communicate.duration_to_hhmmss(pp) for pp in pad_pre]))))  #
         trim_pre = -(pad_pre - pad_pre.max())
         #
         return pad_pre, trim_pre
@@ -270,6 +272,7 @@ class SyncDetector(object):
         in the instance variable of class, there is no need to worry about
         performance.
         """
+        files = check_and_decode_filenames(files)
         return [self._get_media_info(fn) for fn in files]
 
     def align(
@@ -277,6 +280,7 @@ class SyncDetector(object):
         """
         Find time delays between video files
         """
+        files = check_and_decode_filenames(files)
         pad_pre, trim_pre = self._align(
             files, known_delay_map)
         #
