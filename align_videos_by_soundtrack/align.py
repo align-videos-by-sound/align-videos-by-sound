@@ -272,7 +272,7 @@ class SyncDetector(object):
         in the instance variable of class, there is no need to worry about
         performance.
         """
-        files = list(map(os.path.abspath, files))
+        files = check_and_decode_filenames(files)
         return [self._get_media_info(fn) for fn in files]
 
     def align(
@@ -280,7 +280,7 @@ class SyncDetector(object):
         """
         Find time delays between video files
         """
-        files = list(map(os.path.abspath, files))
+        files = check_and_decode_filenames(files)
         pad_pre, trim_pre = self._align(
             files, known_delay_map)
         #
