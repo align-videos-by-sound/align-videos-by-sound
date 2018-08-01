@@ -464,21 +464,20 @@ Negative time was found %s for '%s'. """,
                     "v_extra_filter", "a_extra_filter")
                 })
         # [[idx, start, end], ...]
-        trims = []
-        use_indexes = [0]
+        trims = [_get_trims(i, 0)]
         params = ins["video_mode_params"]
         if ins["video_mode"] in ("overlay", "blend"):
             # for blend, it's top layer
-            use_indexes.append(ins["idx"])
+            trims.append(_get_trims(i, ins["idx"]))
             #
-            use_indexes.append(
-                params[0].get("partner_layer", int(last) - 1))
+            trims.append(
+                _get_trims(
+                    i, params[0].get("partner_layer", int(last) - 1)))
         else:  # select
-            use_indexes.append(params[0])
-        astart_of_use_indexes = len(use_indexes)
-        use_indexes.extend(ins["audio_mode_params"])
-        for idx in use_indexes:
-            trims.append(_get_trims(i, idx))
+            trims.append(_get_trims(i, params[0]))
+        astart_of_use_indexes = len(trims)
+        trims.extend(
+            [_get_trims(i, p) for p in ins["audio_mode_params"]])
         trims = np.array(trims)
         trims[:,2] = trims[:,1] + (trims[:,2] - trims[:,1]).min()
         if not _desired_dur_is_too_small(st_main, trims[0,1]):
