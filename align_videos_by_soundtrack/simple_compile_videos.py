@@ -667,7 +667,7 @@ Do you scan the current directory and create an information file? [y/n] """)
     files = [main_media] + list(glob(pat))
     with SyncDetector() as sd:
         infos = list(zip(files, sd.get_media_info(files)))
-    infos.sort(key=lambda x: -x[1]["duration"])
+    infos[1:] = list(sorted(infos[1:], key=lambda x: -x[1]["duration"]))
     result = {
         "inputs": {
             "main": {
@@ -681,7 +681,8 @@ Do you scan the current directory and create an information file? [y/n] """)
     if input("""Should I fill in the default "intercuts"? [y/n] """) == "y":
         idx = 0
         dur = int(infos[0][1]["duration"])
-        for t in range(0, dur, min(dur // 2, 5)):
+        step = 5
+        for t in range(0, dur, step):
             result["intercuts"].append({
                     "sub_idx": idx % len(result["inputs"]["sub"]),
                     "start_time": duration_to_hhmmss(t),
