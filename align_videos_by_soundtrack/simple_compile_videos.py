@@ -688,15 +688,17 @@ Do you scan the current directory and create an information file? [y/n] """)
             idx = 0
             dur = int(infos[0][1]["duration"])
             step = 5
+            selected = -1
             for t in range(0, dur, step):
                 cands = [i for i, ta in [(i, t - (einf[i + 1]["pad"] - einf[0]["pad"]))
                          for i in range(len(result["inputs"]["sub"]))]
                          if ta + step < einf[i + 1]["orig_duration"] and \
                              ta >= 0 and ta + step >= 0]
-                if not cands:
+                if not cands or selected == cands[idx % len(cands)]:
                     continue
+                selected = cands[idx % len(cands)]
                 result["intercuts"].append({
-                        "sub_idx": cands[idx % len(cands)],
+                        "sub_idx": selected,
                         "start_time": duration_to_hhmmss(t),
                         "time_origin": "main",
                         "video_mode": "select",
