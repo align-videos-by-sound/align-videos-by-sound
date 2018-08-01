@@ -685,11 +685,10 @@ Do you scan the current directory and create an information file? [y/n] """)
             einf = sd.align(
                 files,
                 known_delay_map=args.known_delay_map)
-            idx = 0
             dur = int(infos[0][1]["duration"])
             step = 5
             selected = -1
-            for t in range(0, dur, step):
+            for idx, t in enumerate(range(0, dur, step)):
                 cands = [i for i, ta in [(i, t - (einf[i + 1]["pad"] - einf[0]["pad"]))
                          for i in range(len(result["inputs"]["sub"]))]
                          if ta + step < einf[i + 1]["orig_duration"] and \
@@ -706,7 +705,6 @@ Do you scan the current directory and create an information file? [y/n] """)
                         "audio_mode": "select",
                         "audio_mode_params": ["sub"],
                         })
-                idx += 1
 
     ofn = input("""\
 What sort of name will you save this definition? [default: sample.json] """)
