@@ -98,8 +98,9 @@ _MEDIA_TYPES = {
     (".ogg", True): ("video", "video/ogg"),
 
     (".mp3", False): ("audio", "audio/mpeg"),
-    (".ogg", False): ("video", "audio/ogg"),
-    # TODO: more!
+    (".ogg", False): ("audio", "audio/ogg"),
+    (".wav", False): ("audio", "audio/wav"),
+    # TODO: more? (WebM	video/webm, or extension variations like ".mpeg4")
     }
 
 
