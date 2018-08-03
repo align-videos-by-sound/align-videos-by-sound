@@ -20,6 +20,7 @@ __all__ = [
     "validate_type_one_by_template",
     "validate_dict_one_by_template",
     "validate_list_of_dict_one_by_template",
+    "path2url",
     ]
 
 _logger = logging.getLogger(__name__)
@@ -160,6 +161,22 @@ def validate_list_of_dict_one_by_template(
             exit_on_error):
             return False
     return True
+
+
+try:
+    import pathlib  # python 3.4+
+
+    def path2url(path):
+        return pathlib.Path(os.path.abspath(path)).as_uri()
+except ImportError:
+    # python 2
+    # (we would not support python 3.0 ~ 3.3.)
+    import urlparse
+    import urllib
+
+    def path2url(path):
+        return urlparse.urljoin(
+            'file:', urllib.pathname2url(os.path.abspath(path)))
 
 
 if __name__ == '__main__':
