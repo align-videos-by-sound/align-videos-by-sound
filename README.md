@@ -165,3 +165,14 @@ Usage:
     simple_compile_videos_by_sound_track edit_definitionfile
 
 See `simple_compile_videos_by_sound_track --help` for more details.
+
+### simple_html5_simult_player_builder_by_sound_track
+This script creates a simultaneous playing player using the video (or audio) elements
+of html 5.
+
+It is similar to "simple_stack_videos_by_sound_track", but since it does not involve media
+editing, it will be very useful if you want to know the result quickly.
+
+Usage:
+
+    simple_html5_simult_player_builder_by_sound_track <file1> <file2> [<file3>…]
