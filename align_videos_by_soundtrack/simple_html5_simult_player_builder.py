@@ -80,10 +80,16 @@ $(document).ready(function() {
 </body>
 </html>"""
 
-_tmpl_media = """\
+_tmpl_media = {
+    True: """\
 <%(media_type)s id="%(ident_prefix)s%(index)d" width="%(width)d" height="%(height)d">
   <source src="%(media)s" type="%(media_detailtype)s">
-</%(media_type)s>"""
+</%(media_type)s>""",
+    False: """\
+<%(media_type)s id="%(ident_prefix)s%(index)d">
+  <source src="%(media)s" type="%(media_detailtype)s">
+</%(media_type)s>""",
+}
 
 
 _MEDIA_TYPES = {
@@ -113,7 +119,7 @@ def build(args):
     for i, inf in enumerate(einf):
         ext = os.path.splitext(args.files[i])[1].lower()
         has_video = inf["orig_streams_summary"]["num_video_streams"] > 0
-        medias.append(_tmpl_media % dict(
+        medias.append(_tmpl_media[has_video] % dict(
                 media_type=_MEDIA_TYPES[(ext, has_video)][0],
                 ident_prefix=ident_prefix,
                 index=i,
