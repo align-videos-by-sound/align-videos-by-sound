@@ -54,7 +54,7 @@ function advance(v) {
     });
     sync();
     if (!paused) {
-        setTimeout(play, plyrs.length * 700);
+        setTimeout(play, plyrs.length * 900);
     }
 }
 $(document).ready(function() {
@@ -67,12 +67,18 @@ $(document).ready(function() {
 </head>
 <body>
 <div>
+<button onclick="advance(-60.0);">-60</button>
+<button onclick="advance(-30.0);">-30</button>
 <button onclick="advance(-15.0);">-15</button>
 <button onclick="advance(-5.0);">-5</button>
+&nbsp;
 <button onclick="play();">Play</button>
 <button onclick="pause();">Pause</button>
+&nbsp;
 <button onclick="advance(5.0);">+5</button>
 <button onclick="advance(15.0);">+15</button>
+<button onclick="advance(30.0);">+30</button>
+<button onclick="advance(60.0);">+60</button>
 </div>
 
 %(medias_tab)s
