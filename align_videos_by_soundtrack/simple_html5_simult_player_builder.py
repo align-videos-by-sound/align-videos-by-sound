@@ -45,6 +45,14 @@ function sync() {
             p.currentTime = now + delays[i];
         });
 }
+function resync(v) {
+    let paused = plyrs.findIndex(function (e) { return e.paused; }) >= 0;
+    pause();
+    sync();
+    if (!paused) {
+        setTimeout(play, plyrs.length * 900);
+    }
+}
 function advance(v) {  /* if v==0, we'll reset to start. */
     let paused = plyrs.findIndex(function (e) { return e.paused; }) >= 0;
     pause();
@@ -72,6 +80,9 @@ $(document).ready(function() {
 <div>
 <button onclick="play();">Play</button>
 <button onclick="pause();">Pause</button>
+&nbsp;
+<button onclick="resync();">Re-Sync</button>
+&nbsp;
 &nbsp;
 &nbsp;
 <button onclick="advance(-60.0);">-60</button>
