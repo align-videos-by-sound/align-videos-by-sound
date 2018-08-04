@@ -45,14 +45,17 @@ function sync() {
             p.currentTime = now + delays[i];
         });
 }
-function advance(v) {
+function advance(v) {  /* if v==0, we'll reset to start. */
     let paused = plyrs.findIndex(function (e) { return e.paused; }) >= 0;
     pause();
     let now = plyrs[base].currentTime;
     plyrs.forEach(function (p, i) {
-        p.currentTime = now + v;
+        if (v) {
+            p.currentTime = now + v + delays[i];
+        } else {
+            p.currentTime = delays[i];
+        }
     });
-    sync();
     if (!paused) {
         setTimeout(play, plyrs.length * 900);
     }
@@ -67,13 +70,16 @@ $(document).ready(function() {
 </head>
 <body>
 <div>
+<button onclick="play();">Play</button>
+<button onclick="pause();">Pause</button>
+&nbsp;
+&nbsp;
 <button onclick="advance(-60.0);">-60</button>
 <button onclick="advance(-30.0);">-30</button>
 <button onclick="advance(-15.0);">-15</button>
 <button onclick="advance(-5.0);">-5</button>
 &nbsp;
-<button onclick="play();">Play</button>
-<button onclick="pause();">Pause</button>
+<button onclick="advance(0);">0</button>
 &nbsp;
 <button onclick="advance(5.0);">+5</button>
 <button onclick="advance(15.0);">+15</button>
