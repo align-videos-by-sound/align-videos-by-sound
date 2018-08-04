@@ -105,11 +105,11 @@ $(document).ready(function() {
 
 _tmpl_media = {
     True: """\
-<%(media_type)s id="%(ident_prefix)s%(index)d" width="%(width)d" height="%(height)d">
+<%(media_type)s id="%(ident_prefix)s%(index)d" width="%(width)d" height="%(height)d" controls>
   <source src="%(media)s" type="%(media_detailtype)s">
 </%(media_type)s>""",
     False: """\
-<%(media_type)s id="%(ident_prefix)s%(index)d">
+<%(media_type)s id="%(ident_prefix)s%(index)d" controls>
   <source src="%(media)s" type="%(media_detailtype)s">
 </%(media_type)s>""",
 }
