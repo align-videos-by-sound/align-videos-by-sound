@@ -119,6 +119,17 @@ pan=stereo|\\
         #
         return result, ['[a]']
 
+    def build_multi_streams_audio(self, iamaps):
+            result = []
+            result.append("""\
+    {}
+    amerge=inputs={}
+    [a]""".format("".join(iamaps),
+                len(self._builders),))
+
+            #
+            return result, ['[a]']
+
 
 def _build(args):
     shape = json.loads(args.shape) if args.shape else (2, 2)
@@ -177,13 +188,16 @@ def _build(args):
     filters = []
     r0, vm0, am0 = b.build_each_streams()
     filters.extend(r0)
-    if args.video_mode == "stack" and args.audio_mode != "indivisual":
+    if args.video_mode == "stack" and args.audio_mode != "individual":
         r1, vm1 = b.build_stack_videos(vm0)
         filters.extend(r1)
     else:
         vm1 = vm0
-    if args.audio_mode == "amerge" and args.video_mode != "indivisual":
+    if args.audio_mode == "amerge" and args.video_mode != "individual":
         r2, am = b.build_amerge_audio(am0)
+        filters.extend(r2)
+    elif args.audio_mode == "multi_streams" and args.video_mode != "individual":
+        r2, am = b.build_multi_streams_audio(am0)
         filters.extend(r2)
     else:
         am = am0
@@ -213,15 +227,15 @@ different thing from this. See the option description.""")
         '--audio_mode', choices=['amerge', 'multi_streams', 'individual'], default='amerge',
         help="""\
 Switching whether to merge audios or to keep each as multi streams, or
-to pad each into the corresponding indivisual output file. --audio_mode='indivisual'
-implies --video_mode='indivisual'. (default: %(default)s)""")
+to pad each into the corresponding individual output file. --audio_mode='individual'
+implies --video_mode='individual'. (default: %(default)s)""")
     #
     parser.add_argument(
-        '--video_mode', choices=['stack', 'multi_streams', 'indivisual'], default='stack',
+        '--video_mode', choices=['stack', 'multi_streams', 'individual'], default='stack',
         help="""\
 Switching whether to stack videos or to keep each as multi streams, or
-to pad each into the corresponding indivisual output file. --video_mode='indivisual'
-implies --audio_mode='indivisual'. (default: %(default)s)""")
+to pad each into the corresponding individual output file. --video_mode='individual'
+implies --audio_mode='individual'. (default: %(default)s)""")
     #
     parser.editor_add_filter_extra_arguments()
     #####
@@ -241,7 +255,7 @@ implies --audio_mode='indivisual'. (default: %(default)s)""")
     cli_common.logger_config()
     
     files, fc, (vmap, amap) = _build(args)
-    if args.video_mode == 'indivisual' or args.audio_mode == 'indivisual':
+    if args.video_mode == 'individual' or args.audio_mode == 'individual':
         outbase, outext = os.path.splitext(args.outfile)
         outfiles = ["{}_{:02d}{}".format(outbase, i, outext)
                     for i in range(len(vmap))]
