@@ -218,7 +218,7 @@ different thing from this. See the option description.""")
     parser.add_argument(
         "files", nargs="+",
         help="The media files which contains both video and audio.")
-    parser.editor_add_output_argument(default="merged.mp4")
+    parser.editor_add_output_argument(default="merged.mkv")
     parser.editor_add_output_params_argument(
         notice="Note: In this script, width and height are ignored.")
     parser.editor_add_mode_argument()
