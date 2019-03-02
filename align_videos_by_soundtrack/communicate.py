@@ -6,6 +6,7 @@ external programs (such as ffmpeg) on ​​which this library depends.
 """
 from __future__ import unicode_literals
 from __future__ import absolute_import
+from __future__ import division
 
 import subprocess
 import sys
@@ -115,13 +116,24 @@ def check_stderroutput(*popenargs, **kwargs):
 
 
 def duration_to_hhmmss(*durations):
-    def _conv(d):
+    r"""
+    >>> print(duration_to_hhmmss(3659.33))
+    01:60:59.330
+    >>> print(duration_to_hhmmss(3659.9999))
+    01:61:00.000
+    >>> print("\n".join(duration_to_hhmmss(3659.33, 3659.9999)))
+    01:60:59.330
+    01:61:00.000
+    """
+    def _conv(n):
+        d, _, frac = ("%.3f" % n).partition(".")
+        d = int(d)
         ss_h = abs(d) // 3600
         ss_m = abs(d) // 60
         ss_s = abs(d) % 60
         return "%s%02d:%02d:%02d.%s" % (
             "" if d >= 0 else "-",
-            ss_h, ss_m, ss_s, ("%.3f" % d).split(".")[1])
+            ss_h, ss_m, ss_s, frac)
     if len(durations) > 1:
         return [_conv(d) for d in durations]
     else:
