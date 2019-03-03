@@ -128,17 +128,19 @@ def duration_to_hhmmss(*durations):
     >>> print("\n".join(duration_to_hhmmss(3659.33, 3659.9999)))
     01:00:59.330
     01:01:00.000
+    >>> print(duration_to_hhmmss(-59.99))
+    -00:00:59.990
     """
     def _conv(n):
         d, _, frac = ("%.3f" % n).partition(".")
-        d = int(d)
+        d = abs(int(d))
         ss_h = int(d / 3600)
         d -= ss_h * 3600
         ss_m = int(d / 60)
         d -= ss_m * 60
         ss_s = int(d)
         return "%s%02d:%02d:%02d.%s" % (
-            "" if d >= 0 else "-",
+            "" if n >= 0 else "-",
             ss_h, ss_m, ss_s, frac)
     if len(durations) > 1:
         return [_conv(d) for d in durations]
