@@ -117,20 +117,26 @@ def check_stderroutput(*popenargs, **kwargs):
 
 def duration_to_hhmmss(*durations):
     r"""
+    >>> print(duration_to_hhmmss(59.99))
+    00:00:59.990
     >>> print(duration_to_hhmmss(3659.33))
-    01:60:59.330
+    01:00:59.330
+    >>> print(duration_to_hhmmss(3699.33))
+    01:01:39.330
     >>> print(duration_to_hhmmss(3659.9999))
-    01:61:00.000
+    01:01:00.000
     >>> print("\n".join(duration_to_hhmmss(3659.33, 3659.9999)))
-    01:60:59.330
-    01:61:00.000
+    01:00:59.330
+    01:01:00.000
     """
     def _conv(n):
         d, _, frac = ("%.3f" % n).partition(".")
         d = int(d)
-        ss_h = abs(d) // 3600
-        ss_m = abs(d) // 60
-        ss_s = abs(d) % 60
+        ss_h = int(d / 3600)
+        d -= ss_h * 3600
+        ss_m = int(d / 60)
+        d -= ss_m * 60
+        ss_s = int(d)
         return "%s%02d:%02d:%02d.%s" % (
             "" if d >= 0 else "-",
             ss_h, ss_m, ss_s, frac)
