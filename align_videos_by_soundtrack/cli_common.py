@@ -103,6 +103,11 @@ for some reason, specify this.''' % (
     #
     # for editors
     #
+    def editor_add_userelpath_argument(self):
+        self.add_argument(
+            "--relpath", action="store_true",
+            help="Specifying whether to use relative path in generated script.")
+
     def editor_add_output_argument(self, default):
         self.add_argument(
             "-o", "--outfile", dest="outfile", default=default,

@@ -772,6 +772,7 @@ who are only interested in the most basic use cases.
                         help="\
 Text (JSON) file describing the definition for indicating the intercuts \
 position.")
+    parser.editor_add_userelpath_argument()
     parser.editor_add_output_argument(default="compiled.mp4")
     parser.editor_add_output_params_argument()
     parser.editor_add_mode_argument()
@@ -797,7 +798,8 @@ position.")
         fc,
         vmap, amap,
         args.v_extra_ffargs, args.a_extra_ffargs,
-        [args.outfile])
+        [args.outfile],
+        args.relpath)
 
 
 #

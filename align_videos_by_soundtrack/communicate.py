@@ -462,7 +462,8 @@ def call_ffmpeg_with_filtercomplex(
     amap,  # ["[a0]", "[a1]", ...]
     v_extra_ffargs,
     a_extra_ffargs,
-    outfiles):
+    outfiles,
+    relpath=True):
     """
     Call ffmpeg or print a `bash` script.
 
@@ -472,7 +473,14 @@ def call_ffmpeg_with_filtercomplex(
     is called only by `-filter_complex` and` -map`, it is almost the same
     way of calling it.
     """
-    ifile_args = chain.from_iterable([('-i', f) for f in inputfiles])
+    if relpath:
+        def _pathconv(f):
+            return os.path.relpath(f, os.path.abspath(os.curdir))
+    else:
+        def _pathconv(f):
+            return f
+    ifile_args = chain.from_iterable(
+        [('-i', _pathconv(f)) for f in inputfiles])
     #
     if vmap:
         maps = zip(vmap, amap)  # [("[v0]", "[a0]"), ("[v1]", "[a1]"), ...]
@@ -491,14 +499,14 @@ def call_ffmpeg_with_filtercomplex(
             map_args.extend(chain.from_iterable(
                     [("-map", m) for m in zi[0] if m]))
             map_args.extend(extra_ffargs)
-            map_args.append(zi[1])
+            map_args.append(_pathconv(zi[1]))
     else:
         map_args = []
         for mi in maps:
             map_args.extend(chain.from_iterable(
                     [("-map", m) for m in mi if m]))
         map_args.extend(extra_ffargs)
-        map_args.append(outfiles[0])
+        map_args.append(_pathconv(outfiles[0]))
     #
     try:
         buf = sys.stdout.buffer
