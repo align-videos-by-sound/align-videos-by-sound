@@ -215,6 +215,7 @@ This program combines movies of multiple angles in a tile shape with "hstack" an
 based on sound track synchronization. Although it is a program for the main object
 to arrange tile-like and simultaneous playback, it is possible to do a little
 different thing from this. See the option description.""")
+    parser.editor_add_userelpath_argument()
     parser.add_argument(
         "files", nargs="+",
         help="The media files which contains both video and audio.")
@@ -268,7 +269,8 @@ implies --audio_mode='individual'. (default: %(default)s)""")
         fc,
         vmap, amap,
         args.v_extra_ffargs, args.a_extra_ffargs,
-        outfiles)
+        outfiles,
+        args.relpath)
 
 
 #

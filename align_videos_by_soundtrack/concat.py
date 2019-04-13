@@ -151,6 +151,7 @@ chronological order. When concatenating, if there is a gap which \
 is detected by the "base" audio, this script fills it. However, \
 even if there is overlap, this script does not complain anything, \
 but it goes without saying that it's a "strange" movie.""")
+    parser.editor_add_userelpath_argument()
     parser.editor_add_output_argument(default="concatenated.mp4")
     parser.editor_add_output_params_argument()
     parser.editor_add_mode_argument()
@@ -200,7 +201,8 @@ the default is "pad", assuming your goal is to fill in the leading gap.""")
         fc,
         vmap, amap,
         args.v_extra_ffargs, args.a_extra_ffargs,
-        [args.outfile])
+        [args.outfile],
+        args.relpath)
 
 
 #

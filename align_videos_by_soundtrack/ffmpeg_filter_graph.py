@@ -148,22 +148,17 @@ class ConcatWithGapFilterGraphBuilder(object):
         fpadv.ov.append("[gap{gapno}v%s]" % ident)
         self._tmpl_gapv = (fpadv.to_str(), "".join(fpadv.ov))
 
-        # silence left; silence right; -> amerge
-        fpada = [Filter(), Filter(), Filter()]
+        # aevalsrc
         nch = 2
-        for i in range(nch):
-            fpada[i].add_filter(
-                "sine", sample_rate="%d" % sample_rate,
-                d="{duration:.3f}")
-            olab = "[gap{{gapno}}a_c{i}_{ident}]".format(ident=ident, i=i)
-            fpada[i].oa.append(olab)
-            fpada[-1].iv.append(olab)
-        fpada[-1].add_filter("amerge", len(fpada[-1].iv))
-        fpada[-1].oa.append("[gap{{gapno}}a{ident}]".format(ident=ident))
+        fpada = Filter()
+        fpada.add_filter(
+            "aevalsrc",
+            exprs="'%s'" % ("|".join(["0"] * nch)),
+            sample_rate="%d" % sample_rate,
+            d="{duration:.3f}")
+        fpada.oa.append("[gap{{gapno}}a{ident}]".format(ident=ident))
         self._tmpl_gapa = (
-            ";\n".join([fpada[i].to_str()
-                        for i in range(len(fpada))]),
-            "".join(fpada[-1].oa))
+            fpada.to_str(), "".join(fpada.oa))
 
         # filter to original video stream
         fbodyv = Filter()
